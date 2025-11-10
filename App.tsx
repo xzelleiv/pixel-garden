@@ -7,8 +7,10 @@ import ControlPanel from './components/ControlPanel';
 import LogPanel from './components/LogPanel';
 import DebugPanel from './components/DebugPanel';
 import InfoPanel from './components/InfoPanel';
+import TitleScreen from './components/TitleScreen';
 
 const SAVE_KEY = 'pixelGardenSave';
+const START_KEY = 'pixelGardenStarted';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(() => {
@@ -50,6 +52,17 @@ const App: React.FC = () => {
     return INITIAL_GAME_STATE;
   });
 
+  const [hasStarted, setHasStarted] = useState<boolean>(() => {
+    try {
+      if (typeof window === 'undefined') {
+        return true;
+      }
+      return localStorage.getItem(START_KEY) === 'true';
+    } catch {
+      return true;
+    }
+  });
+
   const [logs, setLogs] = useState<string[]>(['Welcome to Pixel Garden...']);
   const [clearProgress, setClearProgress] = useState(0);
   const clearTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -66,6 +79,17 @@ const App: React.FC = () => {
       console.error("Failed to save game:", error);
     }
   }, [gameState]);
+
+  useEffect(() => {
+    if (!hasStarted) {
+      return;
+    }
+    try {
+      localStorage.setItem(START_KEY, 'true');
+    } catch (error) {
+      console.error('Failed to persist start flag:', error);
+    }
+  }, [hasStarted]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -232,7 +256,7 @@ const App: React.FC = () => {
     });
   }, [addLog]);
 
-  useGameLoop(gameTick, 1000);
+  useGameLoop(gameTick, hasStarted ? 1000 : null);
 
   const handleAction = useCallback((action: string) => {
     setGameState(prev => {
@@ -417,6 +441,11 @@ const App: React.FC = () => {
   }, [gameState.plot, seedGenerationRate, gameState.currentSeason]);
 
 
+  const handleStartGame = useCallback(() => {
+    setHasStarted(true);
+    addLog('Entering the garden...');
+  }, [addLog]);
+
   return (
     <div className="h-screen font-press-start text-sm p-2 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
       <div className="w-full max-w-7xl flex-shrink-0">
@@ -460,6 +489,7 @@ const App: React.FC = () => {
         </div>
       </main>
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
+      {!hasStarted && <TitleScreen onStart={handleStartGame} />}
     </div>
   );
 };

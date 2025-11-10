@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const useGameLoop = (callback: () => void, delay: number) => {
+export const useGameLoop = (callback: () => void, delay: number | null) => {
   // FIX: `useRef` with a generic type argument requires an initial value.
   // Initializing it with the `callback` argument resolves the error.
   const savedCallback = React.useRef(callback);
