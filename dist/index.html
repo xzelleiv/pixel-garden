@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Garden</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'press-start': ['"Press Start 2P"', 'cursive'],
+            },
+            colors: {
+              'pixel-bg': '#3c2f2f',
+              'pixel-panel': '#4b3b3b',
+              'pixel-border': '#6d5b5b',
+              'pixel-text': '#f0f4f8',
+              'pixel-accent': '#ffb400', // Seed yellow
+              'pixel-soil': '#a8755b',
+              'pixel-tree': '#5ad43d',
+              'pixel-withered': '#8b5cf6',
+              'pixel-console-bg': '#0a0a0a',
+              'pixel-console-text': '#4ade80',
+            },
+            boxShadow: {
+              'pixel': '4px 4px 0px 0px rgba(0,0,0,0.5)',
+              'pixel-inset': 'inset 2px 2px 0px 0px rgba(0,0,0,0.3)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Press Start 2P', cursive;
+        -webkit-font-smoothing: none;
+        -moz-osx-font-smoothing: grayscale;
+        image-rendering: pixelated;
+        /* Prevent scrollbars from the layout, especially on mobile */
+        max-height: 100vh;
+        overflow-y: hidden;
+      }
+      @media (min-width: 1024px) {
+        body {
+          zoom: 0.9;
+        }
+      }
+    </style>
+
+<link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/assets/index-CvAIkItA.js"></script>
+</head>
+  <body class="bg-pixel-bg text-pixel-text">
+    <div id="root"></div>
+</body>
+</html>
