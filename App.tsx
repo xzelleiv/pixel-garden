@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { GameState, PlotTile, Resources, UpgradeDefinition, Season } from './types';
-import { INITIAL_GAME_STATE, UPGRADES, PLANTING_MILESTONES, getUpgradeCost, getUpgradeEffect, EVENTS, TREE_LIFESPAN_SEEDS, SEASON_MULTIPLIERS, SEASON_DURATION } from './constants';
+import { INITIAL_GAME_STATE, UPGRADES, PLANTING_MILESTONES, getUpgradeCost, getUpgradeEffect, EVENTS, TREE_LIFESPAN_SEEDS, SEASON_MULTIPLIERS, SEASON_DURATION, formatNumber } from './constants';
 import { useGameLoop } from './hooks/useGameLoop';
 import Plot from './components/Plot';
 import ControlPanel from './components/ControlPanel';
@@ -8,6 +8,7 @@ import LogPanel from './components/LogPanel';
 import DebugPanel from './components/DebugPanel';
 import InfoPanel from './components/InfoPanel';
 import TitleScreen from './components/TitleScreen';
+import { SeedIcon } from './components/icons';
 
 const SAVE_KEY = 'pixelGardenSave';
 const START_KEY = 'pixelGardenStarted';
@@ -407,10 +408,12 @@ const App: React.FC = () => {
 
         if (progress >= 100) {
             localStorage.removeItem(SAVE_KEY);
+            localStorage.removeItem(START_KEY);
             setGameState(INITIAL_GAME_STATE);
             setLogs(['Welcome to Pixel Garden... Progress has been reset.']);
             if (resetTimerRef.current) clearInterval(resetTimerRef.current);
             setResetProgress(0);
+            setHasStarted(false); // Go back to title screen
         }
     }, 30);
   }, []);
@@ -440,19 +443,30 @@ const App: React.FC = () => {
     };
   }, [gameState.plot, seedGenerationRate, gameState.currentSeason]);
 
-
   const handleStartGame = useCallback(() => {
     setHasStarted(true);
     addLog('Entering the garden...');
   }, [addLog]);
 
+  if (!hasStarted) {
+    return <TitleScreen onStart={handleStartGame} />;
+  }
+
   return (
-    <div className="h-screen font-press-start text-sm p-2 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
+    <div className="h-screen font-press-start text-sm p-1 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
       <div className="w-full max-w-7xl flex-shrink-0">
         <LogPanel logs={logs} />
       </div>
+
+      {/* Mobile-only Resource Bar */}
+      <div className="w-full max-w-7xl px-2 mb-2 md:hidden">
+        <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel p-1 flex items-center justify-center gap-2">
+          <SeedIcon />
+          <span className="text-pixel-accent font-bold text-base">{formatNumber(gameState.resources.seeds || 0)}</span>
+        </div>
+      </div>
       
-      <main className="w-full max-w-7xl flex-grow flex flex-col md:grid md:grid-cols-3 lg:grid-cols-6 gap-6 min-h-0 mt-4 md:mt-0">
+      <main className="w-full max-w-7xl flex-grow flex flex-col md:grid md:grid-cols-3 lg:grid-cols-6 gap-6 min-h-0 mt-1 md:mt-0">
         <div className="hidden lg:block lg:col-span-1 md:h-full">
             <InfoPanel upgrades={gameState.upgrades} />
         </div>
@@ -489,7 +503,6 @@ const App: React.FC = () => {
         </div>
       </main>
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
-      {!hasStarted && <TitleScreen onStart={handleStartGame} />}
     </div>
   );
 };

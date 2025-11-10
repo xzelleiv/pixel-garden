@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { GameState, Resources, UpgradeDefinition } from '../types';
 import { SeedIcon } from './icons';
@@ -41,7 +42,7 @@ const ActionButton: React.FC<{
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchCancel}
       disabled={disabled}
-      className={`relative w-full p-3 sm:p-4 bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden`}
+      className={`relative w-full p-2 sm:p-4 bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden`}
       aria-disabled={disabled}
     >
       {progress && progress > 0 && (
@@ -184,7 +185,7 @@ const ControlPanel: React.FC<{
   return (
     <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel flex flex-col h-full">
       {/* Integrated Resources Display */}
-      <div className="p-2 lg:p-4 border-b-2 border-pixel-border">
+      <div className="hidden md:block p-2 lg:p-4 border-b-2 border-pixel-border">
           <h2 className="text-lg text-center mb-1">Resources</h2>
           <div className="space-y-1">
               <ResourceItem icon={<SeedIcon />} label="Seeds" value={resources.seeds || 0} rate={autoGains.seeds || 0} />
@@ -196,7 +197,7 @@ const ControlPanel: React.FC<{
           <button 
             key={tab} 
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 px-2 text-center font-bold whitespace-nowrap
+            className={`flex-1 py-2 px-2 text-center font-bold whitespace-nowrap
               ${activeTab === tab ? 'bg-pixel-border text-pixel-accent' : 'bg-transparent hover:bg-pixel-border/50'}
             `}
           >
@@ -294,6 +295,7 @@ const ControlPanel: React.FC<{
                         {autoGains.normalTrees > 0 && (
                             <div className="flex justify-between">
                                 <span>Normal Trees ({autoGains.normalTrees}):</span>
+                                {/* FIX: Corrected typo from seedGenerationrate to seedGenerationRate */}
                                 <span className="font-bold text-pixel-text">{formatNumber(autoGains.normalTrees * seedGenerationRate * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
                             </div>
                         )}

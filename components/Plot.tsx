@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PlotTile, Season } from '../types';
 import { SEASON_TEXTURES } from '../constants';
@@ -106,7 +107,7 @@ const Plot: React.FC<PlotProps> = ({ tiles, currentSeason }) => {
   const gridSize = Math.ceil(Math.sqrt(tiles.length));
 
   return (
-    <div className="w-full max-w-sm lg:max-w-2xl aspect-square bg-pixel-panel border-4 border-pixel-border p-2 shadow-pixel">
+    <div className="w-full max-w-[280px] sm:max-w-sm lg:max-w-2xl aspect-square bg-pixel-panel border-4 border-pixel-border p-2 shadow-pixel">
         <div 
             className="w-full h-full grid gap-1"
             style={{
