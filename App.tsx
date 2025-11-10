@@ -16,16 +16,33 @@ const App: React.FC = () => {
       const savedGame = localStorage.getItem(SAVE_KEY);
       if (savedGame) {
         const parsedGame = JSON.parse(savedGame);
-        // Merge saved state with initial state to ensure new properties are not missing
-        return {
+        // Deep merge to ensure old save files don't break the game
+        const mergedState = {
           ...INITIAL_GAME_STATE,
           ...parsedGame,
+          resources: {
+            ...INITIAL_GAME_STATE.resources,
+            ...(parsedGame.resources || {}),
+          },
           upgrades: {
             ...INITIAL_GAME_STATE.upgrades,
-            ...parsedGame.upgrades
+            ...(parsedGame.upgrades || {}),
           },
-          peakSeeds: parsedGame.peakSeeds || parsedGame.resources.seeds || 0,
+          loggedMilestones: {
+            ...INITIAL_GAME_STATE.loggedMilestones,
+            ...(parsedGame.loggedMilestones || {}),
+          },
+          notifiedAvailable: {
+            ...INITIAL_GAME_STATE.notifiedAvailable,
+            ...(parsedGame.notifiedAvailable || {}),
+          },
         };
+        // Safely set peakSeeds
+        mergedState.peakSeeds = Math.max(
+          mergedState.peakSeeds || 0,
+          mergedState.resources.seeds || 0
+        );
+        return mergedState;
       }
     } catch (error) {
       console.error("Failed to load saved game:", error);
