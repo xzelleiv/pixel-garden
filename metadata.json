@@ -1,0 +1,5 @@
+{
+  "name": "Pixel Garden",
+  "description": "An incremental game about cultivating a plot of land. Plant trees to generate seeds, manage their lifecycle, and purchase upgrades to expand your pixel garden. Your progress is saved automatically in your browser.",
+  "requestFramePermissions": []
+}
