@@ -55,6 +55,12 @@ type ParticleInstance = {
   draw: (ctx: CanvasRenderingContext2D) => void;
 };
 
+// Constants moved outside for better performance
+const COLORS = ['#3A4330', '#C8934D', '#833A21', '#2D4A22', '#1F3A1A'] as const;
+const COLOR_CHANGE_PROBABILITY = 0.0001;
+const MOBILE_BREAKPOINT = 640;
+const TABLET_BREAKPOINT = 768;
+
 const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -63,7 +69,7 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
 
   const isMobile =
     typeof window !== 'undefined' &&
-    (window.innerWidth <= 640 || /Mobi|Android/i.test(window.navigator.userAgent));
+    (window.innerWidth <= MOBILE_BREAKPOINT || /Mobi|Android/i.test(window.navigator.userAgent));
   const initialParticleCount = isMobile ? 60 : 150;
   const wordFontSize = isMobile ? 28 : 56;
   const treeWidth = isMobile ? 36 : 52;
@@ -97,16 +103,10 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) {
-      return undefined;
-    }
+    if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return undefined;
-    }
-
-    const colors = ['#3A4330', '#C8934D', '#833A21'] as const;
+    if (!ctx) return;
 
     let width = 0;
     let height = 0;
@@ -122,13 +122,13 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
       speedY: number;
       color: string;
 
-      constructor(private w: number, private h: number, private palette: readonly string[]) {
+      constructor(private w: number, private h: number) {
         this.x = Math.random() * this.w;
         this.y = Math.random() * this.h;
-        this.size = Math.random() * 3 + 1;
+        this.size = Math.random() < 0.5 ? 5 : 6;
         this.speedX = (Math.random() - 0.5) * (isMobile ? 0.8 : 1.5);
         this.speedY = (Math.random() - 0.5) * (isMobile ? 0.8 : 1.5);
-        this.color = this.palette[Math.floor(Math.random() * this.palette.length)];
+        this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
       }
 
       update(w: number, h: number) {
@@ -136,28 +136,27 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
         this.y += this.speedY;
 
         if (this.x > w) this.x = 0;
-        if (this.x < 0) this.x = w;
-        if (this.y > h) this.y = 0;
-        if (this.y < 0) this.y = h;
+        else if (this.x < 0) this.x = w;
 
-        if (Math.random() < 0.0001) {
-          this.color = this.palette[Math.floor(Math.random() * this.palette.length)];
+        if (this.y > h) this.y = 0;
+        else if (this.y < 0) this.y = h;
+
+        if (Math.random() < COLOR_CHANGE_PROBABILITY) {
+          this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
         }
       }
 
       draw(ctxLocal: CanvasRenderingContext2D) {
         ctxLocal.fillStyle = this.color;
-        ctxLocal.beginPath();
-        ctxLocal.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctxLocal.fill();
+        ctxLocal.fillRect(Math.floor(this.x), Math.floor(this.y), this.size, this.size);
       }
     }
 
     const initParticles = () => {
       const arr = particlesRef.current;
       arr.length = 0;
-      for (let i = 0; i < particleCount; i += 1) {
-        arr.push(new Particle(width, height, colors));
+      for (let i = 0; i < particleCount; i++) {
+        arr.push(new Particle(width, height));
       }
     };
 
@@ -178,7 +177,7 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
       particleCount =
         width < 480
           ? Math.max(40, Math.floor(initialParticleCount / 3))
-          : width < 768
+          : width < TABLET_BREAKPOINT
           ? Math.max(60, Math.floor(initialParticleCount / 2))
           : initialParticleCount;
 
@@ -187,61 +186,47 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
 
     const animate = () => {
       ctx.clearRect(0, 0, width, height);
-      for (const particle of particlesRef.current) {
-        particle.update(width, height);
-        particle.draw(ctx);
+      const particles = particlesRef.current;
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update(width, height);
+        particles[i].draw(ctx);
       }
-      rafRef.current = window.requestAnimationFrame(animate);
+      rafRef.current = requestAnimationFrame(animate);
     };
 
     setSize();
-    rafRef.current = window.requestAnimationFrame(animate);
+    rafRef.current = requestAnimationFrame(animate);
 
     const onResize = () => setSize();
-
     window.addEventListener('resize', onResize);
 
     let detachResolutionListener: (() => void) | undefined;
-
     try {
       const mq = window.matchMedia(`(resolution: ${getDpr()}dppx)`);
       const onDprChange = () => setSize();
-
-      if (typeof mq.addEventListener === 'function') {
+      if (mq.addEventListener) {
         mq.addEventListener('change', onDprChange);
         detachResolutionListener = () => mq.removeEventListener('change', onDprChange);
-      } else if (typeof mq.addListener === 'function') {
+      } else if (mq.addListener) {
         mq.addListener(onDprChange);
         detachResolutionListener = () => mq.removeListener(onDprChange);
       }
     } catch {
-      detachResolutionListener = undefined;
+      // Ignore
     }
 
     return () => {
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-      }
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', onResize);
-      if (detachResolutionListener) {
-        detachResolutionListener();
-      }
+      if (detachResolutionListener) detachResolutionListener();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialParticleCount, isMobile]);
 
   const handleStart = (event?: MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>) => {
-    if (startedRef.current) {
-      return;
-    }
+    if (startedRef.current) return;
     startedRef.current = true;
-
-    if (rafRef.current) {
-      window.cancelAnimationFrame(rafRef.current);
-    }
-
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     onStart();
-
     event?.preventDefault();
   };
 
@@ -272,5 +257,7 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
 };
 
 export default TitleScreen;
+
+
 
 
