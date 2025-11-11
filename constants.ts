@@ -32,7 +32,7 @@ export const SEASON_MULTIPLIERS: Record<Season, number> = {
 export const EVENTS: EventDefinition[] = [
     {
         id: 'bountifulHarvest',
-        description: "A bountiful harvest! You found a stash of seeds.",
+        description: "You found a stash of seeds.",
         weight: 1,
         apply: (gs) => {
             const healthyTrees = gs.plot.filter(t => t.hasTree && !t.isWithered).length;
@@ -43,7 +43,7 @@ export const EVENTS: EventDefinition[] = [
     },
     {
         id: 'diamondSapling',
-        description: "An iridescent, diamond-like sapling appears! It produces seeds at a vastly increased rate.",
+        description: "An diamond sapling appears! It produces seeds at a vastly increased rate.",
         weight: 0.1,
         apply: (gs) => {
             const emptyTile = gs.plot.find(t => !t.hasTree);
@@ -56,7 +56,7 @@ export const EVENTS: EventDefinition[] = [
     },
     {
         id: 'goldenSapling',
-        description: "A shimmering golden sapling appears! It produces seeds at an increased rate.",
+        description: "A golden sapling appears! It produces seeds at an increased rate.",
         weight: 0.3,
         apply: (gs) => {
             const emptyTile = gs.plot.find(t => !t.hasTree);
@@ -79,8 +79,8 @@ export const EVENTS: EventDefinition[] = [
     },
     {
         id: 'changeToSummer',
-        description: "The sun shines brightly. Summer has arrived.",
-        weight: 0.4,
+        description: "Summer has arrived.",
+        weight: 0.5,
         apply: (gs) => {
             gs.currentSeason = 'summer';
             gs.seasonDuration = SEASON_DURATION;
@@ -127,7 +127,7 @@ export const UPGRADES: Upgrades = {
         description: (level) => `Gather +${(level + 1)} Seed per click.`,
         category: 'Tools',
         baseCost: 50,
-        costExponent: 1.25,
+        costExponent: 1.30,
         baseEffect: 1,
         effectFormula: (level, base) => 1 + (level * base),
     },
@@ -136,7 +136,7 @@ export const UPGRADES: Upgrades = {
         name: 'Shovel',
         description: (level) => `Start composting. Cleared trees yield ${5 * (level + 1)} seeds.`,
         category: 'Tools',
-        baseCost: 300,
+        baseCost: 350,
         costExponent: 2.5,
         baseEffect: 5,
         effectFormula: (level, base) => level * base,
@@ -156,8 +156,8 @@ export const UPGRADES: Upgrades = {
         name: 'Better Soil',
         description: (level) => `Trees generate +${(level + 1)} seed/s.`,
         category: 'Cultivation',
-        baseCost: 150,
-        costExponent: 1.4,
+        baseCost: 200,
+        costExponent: 1.6,
         baseEffect: 1,
         effectFormula: (level, base) => 1 + (level * base),
     },
@@ -166,8 +166,8 @@ export const UPGRADES: Upgrades = {
         name: 'Cleanse Soil',
         description: (level) => `Purifies the soil, increasing tree lifespan by an additional 15 seeds.`,
         category: 'Cultivation',
-        baseCost: 1200,
-        costExponent: 1.9,
+        baseCost: 800,
+        costExponent: 2.1,
         baseEffect: 15,
         effectFormula: (level, base) => level * base,
     },
@@ -177,8 +177,8 @@ export const UPGRADES: Upgrades = {
         description: (level) => `Adds a ${2 * (level + 1)}% chance for a newly planted tree to be golden.`,
         category: 'Cultivation',
         baseCost: 2500,
-        costExponent: 2.0,
-        baseEffect: 2, // percent
+        costExponent: 2.8,
+        baseEffect: 2, 
         effectFormula: (level, base) => level * base,
     },
     'expandPlot': {
@@ -186,8 +186,8 @@ export const UPGRADES: Upgrades = {
         name: 'Expand Plot',
         description: (level) => `Add ${2} new tiles to your plot.`,
         category: 'Expansion',
-        baseCost: 500,
-        costExponent: 2.2,
+        baseCost: 2000,
+        costExponent: 2.5,
         baseEffect: 2,
         effectFormula: (level, base) => base, // Always adds a fixed number of tiles
     },
@@ -206,9 +206,9 @@ export const UPGRADES: Upgrades = {
         name: 'Auto Shovel',
         description: (level) => `Automatically clears a withered tree every ${8 - level} seconds.`,
         category: 'Automation',
-        baseCost: 1500,
-        costExponent: 2.8,
-        baseEffect: 8, // seconds
+        baseCost: 1300,
+        costExponent: 3.0,
+        baseEffect: 10, // seconds
         effectFormula: (level, base) => Math.max(1, base - level),
     }
 };
