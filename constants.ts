@@ -90,7 +90,7 @@ export const EVENTS: EventDefinition[] = [
     {
         id: 'changeToAutumn',
         description: "The leaves turn golden. Autumn has arrived.",
-        weight: 0.4,
+        weight: 0.6,
         apply: (gs) => {
             gs.currentSeason = 'autumn';
             gs.seasonDuration = SEASON_DURATION;
@@ -100,7 +100,7 @@ export const EVENTS: EventDefinition[] = [
     {
         id: 'changeToWinter',
         description: "A chill is in the air. Winter has come.",
-        weight: 0.8,
+        weight: 0.3,
         apply: (gs) => {
             gs.currentSeason = 'winter';
             gs.seasonDuration = SEASON_DURATION;
@@ -127,7 +127,7 @@ export const UPGRADES: Upgrades = {
         description: (level) => `Gather +${(level + 1)} Seed per click.`,
         category: 'Tools',
         baseCost: 50,
-        costExponent: 1.30,
+        costExponent: 2.2,
         baseEffect: 1,
         effectFormula: (level, base) => 1 + (level * base),
     },
@@ -156,7 +156,7 @@ export const UPGRADES: Upgrades = {
         name: 'Better Soil',
         description: (level) => `Trees generate +${(level + 1)} seed/s.`,
         category: 'Cultivation',
-        baseCost: 200,
+        baseCost: 500,
         costExponent: 1.6,
         baseEffect: 1,
         effectFormula: (level, base) => 1 + (level * base),

@@ -134,28 +134,28 @@ const App: React.FC = () => {
 
       // --- Event Handling ---
       const EVENT_CHANCE = 0.002; // 2% chance per second
-      if (Math.random() < EVENT_CHANCE) {
-          const possibleEvents = EVENTS.filter(event => {
-              if (event.id === 'bountifulHarvest' && healthyTreesCount === 0) return false;
-              // Prevent changing to the same season
-              if (event.id.startsWith('changeTo') && mutableState.currentSeason === event.id.replace('changeTo', '').toLowerCase()) return false;
-              return true;
-          });
-
-          if (possibleEvents.length > 0) {
-              const totalWeight = possibleEvents.reduce((sum, event) => sum + event.weight, 0);
-              let random = Math.random() * totalWeight;
-              const triggeredEvent = possibleEvents.find(event => {
-                  random -= event.weight;
-                  return random < 0;
-              });
-
-              if (triggeredEvent) {
-                  addLog(triggeredEvent.description);
-                  mutableState = triggeredEvent.apply(mutableState);
-              }
-          }
-      }
+if (Math.random() < EVENT_CHANCE) {
+    const possibleEvents = EVENTS.filter(event => {
+        if (event.id === 'bountifulHarvest' && healthyTreesCount === 0) return false;
+        // Prevent changing to the same season
+        if (event.id.startsWith('changeTo') && mutableState.currentSeason === event.id.replace('changeTo', '').toLowerCase()) return false;
+        // Prevent overlapping season changes (only allow if current season duration has expired)
+        if (event.id.startsWith('changeTo') && mutableState.seasonDuration > 0) return false;
+        return true;
+    });
+    if (possibleEvents.length > 0) {
+        const totalWeight = possibleEvents.reduce((sum, event) => sum + event.weight, 0);
+        let random = Math.random() * totalWeight;
+        const triggeredEvent = possibleEvents.find(event => {
+            random -= event.weight;
+            return random < 0;
+        });
+        if (triggeredEvent) {
+            addLog(triggeredEvent.description);
+            mutableState = triggeredEvent.apply(mutableState);
+        }
+    }
+}
       
       // --- Automation ---
       const autoPlanterLevel = mutableState.upgrades.autoPlanter.level;
