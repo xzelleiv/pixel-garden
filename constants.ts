@@ -2,7 +2,7 @@
 import { GameState, Resource, Upgrades, PlotTile, Season, EventDefinition } from './types';
 
 export const INITIAL_PLOT_SIZE = 16;
-export const TREE_LIFESPAN_SEEDS = 40;
+export const TREE_LIFESPAN_SEEDS = 60;
 export const PLANTING_MILESTONES = [1, 100, 500, 1000, 3000, 4000, 5000, 7000, 10000];
 export const SEASON_DURATION = 300; // 5 minutes
 
@@ -23,10 +23,10 @@ export const SEASON_TEXTURES: Record<Season, { tree: string; withered?: string }
 };
 
 export const SEASON_MULTIPLIERS: Record<Season, number> = {
-    spring: 2,
-    summer: 1,
-    autumn: 1.5,
-    winter: 1.2,
+    spring: 5,
+    summer: 2,
+    autumn: 3,
+    winter: 1,
 };
 
 export const EVENTS: EventDefinition[] = [
@@ -100,7 +100,7 @@ export const EVENTS: EventDefinition[] = [
     {
         id: 'changeToWinter',
         description: "A chill is in the air. Winter has come.",
-        weight: 0.4,
+        weight: 0.8,
         apply: (gs) => {
             gs.currentSeason = 'winter';
             gs.seasonDuration = SEASON_DURATION;
