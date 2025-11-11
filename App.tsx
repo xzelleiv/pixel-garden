@@ -133,7 +133,7 @@ const App: React.FC = () => {
       }
 
       // --- Event Handling ---
-      const EVENT_CHANCE = 0.4; // 4% chance per second
+      const EVENT_CHANCE = 0.002; // 2% chance per second
       if (Math.random() < EVENT_CHANCE) {
           const possibleEvents = EVENTS.filter(event => {
               if (event.id === 'bountifulHarvest' && healthyTreesCount === 0) return false;
