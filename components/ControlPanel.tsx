@@ -333,7 +333,7 @@ const ControlPanel: React.FC<{
             {/* Credits footer */}
             <div className="mt-4 pt-2 border-t-2 border-pixel-border text-xs text-pixel-text/70">
               <div className="font-bold text-pixel-accent mb-1">Credits</div>
-              <div>Developer: Pasao,</div>
+              <div>Developer: Pasao</div>
               <div>Co-Developer: Scoggins</div>
               <div>Assets: Cuaresma, Mas</div>
               <div>Version: 1.4.0</div>
