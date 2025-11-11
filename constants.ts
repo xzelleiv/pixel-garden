@@ -230,7 +230,7 @@ export const getUpgradeEffect = (id: string, level: number): number => {
 
 export const INITIAL_GAME_STATE: GameState = {
     resources: {
-        [Resource.Seeds]: 20,
+        [Resource.Seeds]: 40,
     },
     upgrades: {
         'gloves': { level: 0 },
@@ -255,7 +255,7 @@ export const INITIAL_GAME_STATE: GameState = {
     autoPlanterCooldown: 10,
     autoShovelCooldown: 8,
     seasonDuration: 0,
-    peakSeeds: 20,
+    peakSeeds: 40,
 };
 
 export const formatNumber = (num: number): string => {
