@@ -265,7 +265,7 @@ const TitleScreen: FC<TitleScreenProps> = ({ onStart }) => {
           />
           <span style={wordStyle}>Garden</span>
         </div>
-        <p style={hintStyle}>Tap or click to begin</p>
+        <p style={hintStyle}>Tap anywhere to begin</p>
       </div>
     </div>
   );
