@@ -11,6 +11,20 @@ import TitleScreen from './components/TitleScreen';
 import { SeedIcon } from './components/icons';
 
 const SAVE_KEY = 'pixelGardenSave';
+type AudioTrack = 'title' | 'main' | 'none';
+
+type ViteImportMetaWithBaseUrl = ImportMeta & {
+  env?: {
+    BASE_URL?: string;
+  };
+};
+
+const getAssetUrl = (assetPath: string) => {
+  const base = ((import.meta as ViteImportMetaWithBaseUrl).env?.BASE_URL) ?? '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  const normalizedPath = assetPath.startsWith('/') ? assetPath.slice(1) : assetPath;
+  return `${normalizedBase}${normalizedPath}`;
+};
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(() => {
@@ -63,6 +77,9 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const titleAudioRef = useRef<HTMLAudioElement | null>(null);
   const mainAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [currentTrack, setCurrentTrack] = useState<AudioTrack>('title');
+  const [awaitingUserGesture, setAwaitingUserGesture] = useState(false);
+  const awaitingUserGestureRef = useRef(false);
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -97,47 +114,83 @@ const App: React.FC = () => {
     };
   }, [isSidebarOpen]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const audio = titleAudioRef.current;
+  const markAwaitingGesture = useCallback(() => {
+    if (awaitingUserGestureRef.current) return;
+    awaitingUserGestureRef.current = true;
+    setAwaitingUserGesture(true);
+  }, []);
+
+  const clearAwaitsGesture = useCallback(() => {
+    if (!awaitingUserGestureRef.current) return;
+    awaitingUserGestureRef.current = false;
+    setAwaitingUserGesture(false);
+  }, []);
+
+  const attemptPlayback = useCallback((audio: HTMLAudioElement | null) => {
     if (!audio) return;
-    audio.loop = true;
-    audio.volume = 0.65;
-
-    if (!hasStarted) {
-      const playPromise = audio.play();
-      if (playPromise) {
-        playPromise.catch(() => {
-          audio.muted = true;
-          audio.play().catch(() => undefined);
-        });
-      }
-    } else {
-      audio.pause();
-      audio.currentTime = 0;
+    const playPromise = audio.play();
+    if (playPromise) {
+      playPromise.catch(() => {
+        markAwaitingGesture();
+      });
     }
-  }, [hasStarted]);
+  }, [markAwaitingGesture]);
+
+  const handleUserGesture = useCallback(
+    (trackOverride?: AudioTrack) => {
+      clearAwaitsGesture();
+      const targetTrack = trackOverride ?? currentTrack;
+      if (targetTrack === 'title') {
+        attemptPlayback(titleAudioRef.current);
+      } else if (targetTrack === 'main') {
+        attemptPlayback(mainAudioRef.current);
+      }
+    },
+    [attemptPlayback, clearAwaitsGesture, currentTrack]
+  );
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const audio = mainAudioRef.current;
-    if (!audio) return;
-    audio.loop = true;
-    audio.volume = 0.6;
-
-    if (hasStarted) {
-      const playPromise = audio.play();
-      if (playPromise) {
-        playPromise.catch(() => {
-          audio.muted = true;
-          audio.play().catch(() => undefined);
-        });
-      }
-    } else {
-      audio.pause();
-      audio.currentTime = 0;
+    const titleAudio = titleAudioRef.current;
+    if (titleAudio) {
+      titleAudio.loop = true;
+      titleAudio.volume = 0.65;
     }
-  }, [hasStarted]);
+    const mainAudio = mainAudioRef.current;
+    if (mainAudio) {
+      mainAudio.loop = true;
+      mainAudio.volume = 0.6;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentTrack === 'title') {
+      if (mainAudioRef.current) {
+        mainAudioRef.current.pause();
+        mainAudioRef.current.currentTime = 0;
+      }
+      attemptPlayback(titleAudioRef.current);
+    } else if (currentTrack === 'main') {
+      if (titleAudioRef.current) {
+        titleAudioRef.current.pause();
+        titleAudioRef.current.currentTime = 0;
+      }
+      attemptPlayback(mainAudioRef.current);
+    } else {
+      titleAudioRef.current?.pause();
+      mainAudioRef.current?.pause();
+    }
+  }, [currentTrack, attemptPlayback]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !awaitingUserGesture) return;
+    const onUserGesture = () => handleUserGesture();
+    window.addEventListener('pointerdown', onUserGesture, { once: true });
+    window.addEventListener('keydown', onUserGesture, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', onUserGesture);
+      window.removeEventListener('keydown', onUserGesture);
+    };
+  }, [awaitingUserGesture, handleUserGesture]);
 
   const addLog = useCallback((message: string) => {
     setLogs(prev => {
@@ -451,6 +504,7 @@ if (Math.random() < EVENT_CHANCE) {
             setLogs(['Welcome to Pixel Garden... Progress has been reset.']);
             if (resetTimerRef.current) clearInterval(resetTimerRef.current);
             setResetProgress(0);
+            setCurrentTrack('title');
             setHasStarted(false); // Go back to title screen
         }
     }, 30);
@@ -482,14 +536,15 @@ if (Math.random() < EVENT_CHANCE) {
   }, [gameState.plot, seedGenerationRate, gameState.currentSeason]);
 
   const handleStartGame = useCallback(() => {
+    setCurrentTrack('main');
     setHasStarted(true);
     addLog('Entering the garden...');
     if (titleAudioRef.current) {
       titleAudioRef.current.pause();
       titleAudioRef.current.currentTime = 0;
     }
-    mainAudioRef.current?.play().catch(() => undefined);
-  }, [addLog]);
+    handleUserGesture('main');
+  }, [addLog, handleUserGesture]);
 
   return (
     <div className="h-screen font-press-start text-sm p-1 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
@@ -614,8 +669,8 @@ if (Math.random() < EVENT_CHANCE) {
           </div>
         </div>
       </div>
-  <audio ref={titleAudioRef} src="/audio/titlescreen.mp3" preload="auto" />
-  <audio ref={mainAudioRef} src="/audio/mainbg.mp3" preload="auto" />
+  <audio ref={titleAudioRef} src={getAssetUrl('audio/titlescreen.mp3')} preload="auto" />
+  <audio ref={mainAudioRef} src={getAssetUrl('audio/mainbg.mp3')} preload="auto" />
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
       {!hasStarted && <TitleScreen onStart={handleStartGame} />}
     </div>
