@@ -285,10 +285,12 @@ const ControlPanel: React.FC<{
                 disabled={witheredCount === 0}
                 progress={clearProgress}
               >
-                {clearProgress > 0
-                  ? 'Clearing...'
-                  : `Clear Withered${witheredCount > 0 ? ` (${witheredCount})` : ''}`
-                }
+                <span className="flex items-center gap-1">
+                  <span>{clearProgress > 0 ? 'Clearing...' : 'Clear Withered'}</span>
+                  {clearProgress === 0 && witheredCount > 0 && (
+                    <span className="text-xs text-pixel-accent">({witheredCount})</span>
+                  )}
+                </span>
               </ActionButton>
             </div>
           )}
