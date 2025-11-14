@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { GameState, Resources, UpgradeDefinition } from '../types';
 import { SeedIcon } from './icons';
 import { UPGRADES, getUpgradeCost, getUpgradeEffect, formatNumber, SEASON_MULTIPLIERS } from '../constants';
@@ -31,7 +31,10 @@ const ActionButton: React.FC<{
   disabled?: boolean; 
   cost?: number; 
   progress?: number;
-}> = ({ onClick, onMouseDown, onMouseUp, onMouseLeave, onTouchStart, onTouchEnd, onTouchCancel, children, disabled, cost, progress }) => {
+  onPointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+}> = ({ onClick, onMouseDown, onMouseUp, onMouseLeave, onTouchStart, onTouchEnd, onTouchCancel, onPointerDown, onPointerUp, onPointerCancel, children, disabled, cost, progress }) => {
   return (
     <button
       onClick={onClick}
@@ -41,8 +44,11 @@ const ActionButton: React.FC<{
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchCancel}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
       disabled={disabled}
-      className={`relative w-full p-2 sm:p-4 bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden`}
+                className={`relative w-full p-2 sm:p-4 bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden touch-action-none`}
       aria-disabled={disabled}
     >
       {progress && progress > 0 && (
@@ -168,6 +174,8 @@ const ControlPanel: React.FC<{
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('Actions');
   const { upgrades, costs, plot } = gameState;
+  const holdActiveRef = useRef(false);
+  const pointerIdRef = useRef<number | null>(null);
 
   const treeCount = plot.filter(t => t.hasTree).length;
   const healthyTreeCount = plot.filter(t => t.hasTree && !t.isWithered).length;
@@ -175,6 +183,44 @@ const ControlPanel: React.FC<{
 
   const plotCapacity = plot.length;
   const currentPlantingCost = costs.tree + (treeCount * 5);
+
+  const handleHoldStart = useCallback((event?: React.SyntheticEvent<HTMLButtonElement>) => {
+    if (holdActiveRef.current) return;
+    holdActiveRef.current = true;
+    event?.preventDefault();
+    onClearHoldStart?.(event);
+  }, [onClearHoldStart]);
+
+  const handleHoldEnd = useCallback((event?: React.SyntheticEvent<HTMLButtonElement>) => {
+    if (!holdActiveRef.current) return;
+    holdActiveRef.current = false;
+    event?.preventDefault();
+    if (pointerIdRef.current !== null && event?.currentTarget) {
+      event.currentTarget.releasePointerCapture?.(pointerIdRef.current);
+      pointerIdRef.current = null;
+    }
+    onClearHoldEnd?.(event);
+  }, [onClearHoldEnd]);
+
+  const handlePointerHoldStart = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdActiveRef.current) return;
+    holdActiveRef.current = true;
+    event.preventDefault();
+    pointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onClearHoldStart?.(event);
+  }, [onClearHoldStart]);
+
+  const handlePointerHoldEnd = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!holdActiveRef.current) return;
+    holdActiveRef.current = false;
+    event.preventDefault();
+    if (pointerIdRef.current !== null) {
+      event.currentTarget.releasePointerCapture?.(pointerIdRef.current);
+      pointerIdRef.current = null;
+    }
+    onClearHoldEnd?.(event);
+  }, [onClearHoldEnd]);
 
   let gatherButtonText: React.ReactNode = 'Gather Seeds';
   if (treeCount === 0) gatherButtonText = 'No trees planted';
@@ -206,161 +252,160 @@ const ControlPanel: React.FC<{
         ))}
       </div>
 
-      <div className="p-2 lg:p-4 flex-grow overflow-y-auto">
-        {activeTab === 'Actions' && (
-          <div className="space-y-3">
-            <ActionButton onClick={() => onAction('gatherSeeds')} disabled={healthyTreeCount === 0}>
-              {gatherButtonText}
-            </ActionButton>
+      <div className="p-2 lg:p-4 flex-grow flex flex-col overflow-hidden">
+        <div className="flex-grow overflow-y-auto">
+          {activeTab === 'Actions' && (
+            <div className="space-y-3">
+              <ActionButton onClick={() => onAction('gatherSeeds')} disabled={healthyTreeCount === 0}>
+                {gatherButtonText}
+              </ActionButton>
 
-            <ActionButton 
-              onClick={() => onAction('plantTree')} 
-              disabled={treeCount >= plotCapacity || gameState.resources.seeds < currentPlantingCost} 
-              cost={currentPlantingCost}
-            >
-              Plant Tree ({treeCount}/{plotCapacity})
-            </ActionButton>
+              <ActionButton 
+                onClick={() => onAction('plantTree')} 
+                disabled={treeCount >= plotCapacity || gameState.resources.seeds < currentPlantingCost} 
+                cost={currentPlantingCost}
+              >
+                Plant Tree ({treeCount}/{plotCapacity})
+              </ActionButton>
 
-            <ActionButton
-              onClick={() => {
-                if (upgrades.shovel?.level > 0) {
-                  onAction('clearWithered');
-                }
-              }}
-              onMouseDown={() => onClearHoldStart?.()}
-              onMouseUp={() => onClearHoldEnd?.()}
-              onMouseLeave={() => onClearHoldEnd?.()}
-              onTouchStart={(e) => { e.preventDefault(); onClearHoldStart?.(e); }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                onClearHoldEnd?.(e);
-                // Explicitly handle tap action for touch devices if shovel is owned,
-                // because preventDefault() stops the 'click' event from firing.
-                if (upgrades.shovel?.level > 0) {
+              <ActionButton
+                onClick={() => {
+                  if (upgrades.shovel?.level > 0) {
                     onAction('clearWithered');
+                  }
+                }}
+                onMouseDown={handleHoldStart}
+                onMouseUp={handleHoldEnd}
+                onTouchStart={handleHoldStart}
+                onTouchEnd={handleHoldEnd}
+                onTouchCancel={handleHoldEnd}
+                onPointerDown={handlePointerHoldStart}
+                onPointerUp={handlePointerHoldEnd}
+                onPointerCancel={handlePointerHoldEnd}
+                disabled={witheredCount === 0}
+                progress={clearProgress}
+              >
+                {clearProgress > 0
+                  ? 'Clearing...'
+                  : `Clear Withered${witheredCount > 0 ? ` (${witheredCount})` : ''}`
                 }
-              }}
-              onTouchCancel={(e) => { e.preventDefault(); onClearHoldEnd?.(e); }}
-              disabled={witheredCount === 0}
-              progress={clearProgress}
-            >
-              {clearProgress > 0 ? 'Clearing...' : `Clear Withered (${witheredCount})`}
-            </ActionButton>
-          </div>
-        )}
+              </ActionButton>
+            </div>
+          )}
 
-        {activeTab === 'Upgrades' && (
-          <div className="space-y-3">
-            <UpgradeCategory title="Tools" upgradeIds={['gloves', 'shovel']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-            <UpgradeCategory title="Cultivation" upgradeIds={['betterSoil', 'composter', 'cleanseSoil', 'fertilizer']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-            <UpgradeCategory title="Expansion" upgradeIds={['expandPlot']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-            <UpgradeCategory title="Automation" upgradeIds={['autoPlanter', 'autoShovel']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-          </div>
-        )}
+          {activeTab === 'Upgrades' && (
+            <div className="space-y-3">
+              <UpgradeCategory title="Tools" upgradeIds={['gloves', 'shovel']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
+              <UpgradeCategory title="Cultivation" upgradeIds={['betterSoil', 'composter', 'cleanseSoil', 'fertilizer']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
+              <UpgradeCategory title="Expansion" upgradeIds={['expandPlot']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
+              <UpgradeCategory title="Automation" upgradeIds={['autoPlanter', 'autoShovel']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
+            </div>
+          )}
+
+          {activeTab === 'Stats' && (
+            <div className="flex flex-col gap-4">
+              {/* Season Info */}
+              <div>
+                <h3 className="text-lg text-pixel-accent mb-1">Season Info</h3>
+                <div className="text-xs space-y-1 text-pixel-text/80">
+                    <div className="flex justify-between">
+                        <span>Current Season:</span>
+                        <span className="font-bold text-pixel-text capitalize">{gameState.currentSeason}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Seed Bonus:</span>
+                        <span className="font-bold text-pixel-accent">{SEASON_MULTIPLIERS[gameState.currentSeason]}x</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Time Remaining:</span>
+                        <span className="font-bold text-pixel-text">{formatTime(gameState.seasonDuration)}</span>
+                    </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t-2 border-pixel-border">
+                <h3 className="text-lg text-pixel-accent mb-1">Info</h3>
+                <div className="text-xs space-y-1 text-pixel-text/80">
+                  <div className="flex justify-between">
+                    <span>Manual Gather:</span>
+                    <span className="font-bold text-pixel-text">{autoGains.manual} Seeds</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Generation:</span>
+                    <span className="font-bold text-pixel-text">{formatNumber(autoGains.seeds)} Seeds/s</span>
+                  </div>
+                  {(autoGains.goldenTrees > 0 || autoGains.diamondTrees > 0) && (
+                      <div className="pl-4 mt-1 text-pixel-text/80 text-xs space-y-0.5">
+                          {autoGains.normalTrees > 0 && (
+                              <div className="flex justify-between">
+                                  <span>Normal Trees ({autoGains.normalTrees}):</span>
+                                  <span className="font-bold text-pixel-text">{formatNumber(autoGains.normalTrees * seedGenerationRate * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
+                              </div>
+                          )}
+                          {autoGains.goldenTrees > 0 && (
+                              <div className="flex justify-between">
+                                  <span>Golden Trees ({autoGains.goldenTrees}):</span>
+                                  <span className="font-bold text-pixel-accent">{formatNumber(autoGains.goldenTrees * seedGenerationRate * 2 * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
+                              </div>
+                          )}
+                          {autoGains.diamondTrees > 0 && (
+                              <div className="flex justify-between">
+                                  <span>Diamond Trees ({autoGains.diamondTrees}):</span>
+                                  <span className="font-bold text-cyan-400">{formatNumber(autoGains.diamondTrees * seedGenerationRate * 5 * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
+                              </div>
+                          )}
+                      </div>
+                  )}
+                  {upgrades.shovel?.level > 0 && (
+                    <div className="flex justify-between">
+                      <span>Compost Bonus:</span>
+                      <span className="font-bold text-pixel-text">{autoGains.compost} Seeds</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>Tree Lifespan:</span>
+                    <span className="font-bold text-pixel-text">{gameState.treeLifespanSeeds} Seeds</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Peak Seeds:</span>
+                    <span className="font-bold text-pixel-text">{formatNumber(gameState.peakSeeds)} Seeds</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Credits footer */}
+              <div className="mt-4 pt-2 border-t-2 border-pixel-border text-xs text-pixel-text/70">
+                <div className="font-bold text-pixel-accent mb-1">Credits</div>
+                <div>Developer: Pasao</div>
+                <div>Co-Developer: Scoggins</div>
+                <div>Assets: Cuaresma, Mas</div>
+                <div>Version: 1.4.0</div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {activeTab === 'Stats' && (
-          <div>
-            {/* Season Info */}
-            <div className="mb-4">
-              <h3 className="text-lg text-pixel-accent mb-1">Season Info</h3>
-              <div className="text-xs space-y-1 text-pixel-text/80">
-                  <div className="flex justify-between">
-                      <span>Current Season:</span>
-                      <span className="font-bold text-pixel-text capitalize">{gameState.currentSeason}</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span>Seed Bonus:</span>
-                      <span className="font-bold text-pixel-accent">{SEASON_MULTIPLIERS[gameState.currentSeason]}x</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span>Time Remaining:</span>
-                      <span className="font-bold text-pixel-text">{formatTime(gameState.seasonDuration)}</span>
-                  </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t-2 border-pixel-border">
-              <h3 className="text-lg text-pixel-accent mb-1">Info</h3>
-              <div className="text-xs space-y-1 text-pixel-text/80">
-                <div className="flex justify-between">
-                  <span>Manual Gather:</span>
-                  <span className="font-bold text-pixel-text">{autoGains.manual} Seeds</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Generation:</span>
-                  <span className="font-bold text-pixel-text">{formatNumber(autoGains.seeds)} Seeds/s</span>
-                </div>
-                {(autoGains.goldenTrees > 0 || autoGains.diamondTrees > 0) && (
-                    <div className="pl-4 mt-1 text-pixel-text/80 text-xs space-y-0.5">
-                        {autoGains.normalTrees > 0 && (
-                            <div className="flex justify-between">
-                                <span>Normal Trees ({autoGains.normalTrees}):</span>
-                                {/* FIX: Corrected typo from seedGenerationrate to seedGenerationRate */}
-                                <span className="font-bold text-pixel-text">{formatNumber(autoGains.normalTrees * seedGenerationRate * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
-                            </div>
-                        )}
-                        {autoGains.goldenTrees > 0 && (
-                            <div className="flex justify-between">
-                                <span>Golden Trees ({autoGains.goldenTrees}):</span>
-                                <span className="font-bold text-pixel-accent">{formatNumber(autoGains.goldenTrees * seedGenerationRate * 2 * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
-                            </div>
-                        )}
-                        {autoGains.diamondTrees > 0 && (
-                            <div className="flex justify-between">
-                                <span>Diamond Trees ({autoGains.diamondTrees}):</span>
-                                <span className="font-bold text-cyan-400">{formatNumber(autoGains.diamondTrees * seedGenerationRate * 5 * SEASON_MULTIPLIERS[gameState.currentSeason])}/s</span>
-                            </div>
-                        )}
-                    </div>
-                )}
-                {upgrades.shovel?.level > 0 && (
-                  <div className="flex justify-between">
-                    <span>Compost Bonus:</span>
-                    <span className="font-bold text-pixel-text">{autoGains.compost} Seeds</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span>Tree Lifespan:</span>
-                  <span className="font-bold text-pixel-text">{gameState.treeLifespanSeeds} Seeds</span>
-                </div>
-                 <div className="flex justify-between">
-                  <span>Peak Seeds:</span>
-                  <span className="font-bold text-pixel-text">{formatNumber(gameState.peakSeeds)} Seeds</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Credits footer */}
-            <div className="mt-4 pt-2 border-t-2 border-pixel-border text-xs text-pixel-text/70">
-              <div className="font-bold text-pixel-accent mb-1">Credits</div>
-              <div>Developer: Pasao</div>
-              <div>Co-Developer: Scoggins</div>
-              <div>Assets: Cuaresma, Mas</div>
-              <div>Version: 1.4.0</div>
-            </div>
-
-            {/* Reset Button */}
-            <div className="mt-4 pt-2 border-t-2 border-pixel-border text-center">
-              <button
-                onMouseDown={onResetHoldStart}
-                onMouseUp={onResetHoldEnd}
-                onMouseLeave={onResetHoldEnd}
-                onTouchStart={(e) => { e.preventDefault(); onResetHoldStart(e); }}
-                onTouchEnd={(e) => { e.preventDefault(); onResetHoldEnd(e); }}
-                onTouchCancel={(e) => { e.preventDefault(); onResetHoldEnd(e); }}
-                className="relative overflow-hidden px-3 py-1 bg-red-700 text-pixel-bg font-bold shadow-pixel hover:bg-red-600 active:shadow-pixel-inset active:translate-y-px transition-colors whitespace-nowrap text-xs"
-              >
-                {resetProgress > 0 && (
-                  <div
-                    className="absolute top-0 left-0 h-full bg-pixel-accent/50"
-                    style={{ width: `${resetProgress}%` }}
-                  />
-                )}
-                <span className="relative">
-                  {resetProgress > 0 ? `Resetting...` : 'Reset Progress'}
-                </span>
-              </button>
-            </div>
+          <div className="mt-4 pt-2 border-t-2 border-pixel-border text-center">
+            <button
+              onMouseDown={onResetHoldStart}
+              onMouseUp={onResetHoldEnd}
+              onMouseLeave={onResetHoldEnd}
+              onTouchStart={(e) => { e.preventDefault(); onResetHoldStart(e); }}
+              onTouchEnd={(e) => { e.preventDefault(); onResetHoldEnd(e); }}
+              onTouchCancel={(e) => { e.preventDefault(); onResetHoldEnd(e); }}
+              className="relative overflow-hidden px-3 py-1 bg-red-700 text-pixel-bg font-bold shadow-pixel hover:bg-red-600 active:shadow-pixel-inset active:translate-y-px transition-colors whitespace-nowrap text-xs"
+            >
+              {resetProgress > 0 && (
+                <div
+                  className="absolute top-0 left-0 h-full bg-pixel-accent/50"
+                  style={{ width: `${resetProgress}%` }}
+                />
+              )}
+              <span className="relative">
+                {resetProgress > 0 ? `Resetting...` : 'Reset Progress'}
+              </span>
+            </button>
           </div>
         )}
       </div>

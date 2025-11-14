@@ -70,6 +70,7 @@ const App: React.FC = () => {
   const [isDebugVisible, setIsDebugVisible] = useState(false);
   const [resetProgress, setResetProgress] = useState(0);
   const resetTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -103,6 +104,18 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isSidebarOpen]);
+
   const addLog = useCallback((message: string) => {
     setLogs(prev => {
         if (prev.length > 50) {
@@ -112,6 +125,9 @@ const App: React.FC = () => {
         return [...prev, message];
     });
   }, []);
+
+  const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
+  const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
   
   const manualSeedGain = useMemo(() => getUpgradeEffect('gloves', gameState.upgrades.gloves.level), [gameState.upgrades.gloves.level]);
   const seedGenerationRate = useMemo(() => getUpgradeEffect('betterSoil', gameState.upgrades.betterSoil.level), [gameState.upgrades.betterSoil.level]);
@@ -454,8 +470,26 @@ if (Math.random() < EVENT_CHANCE) {
 
   return (
     <div className="h-screen font-press-start text-sm p-1 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
-      <div className="w-full max-w-7xl flex-shrink-0">
-        <LogPanel logs={logs} />
+      <div className="w-full max-w-7xl flex-shrink-0 flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1">
+            <LogPanel logs={logs} />
+          </div>
+          <button
+            type="button"
+            aria-expanded={isSidebarOpen}
+            aria-controls="mobile-sidebar"
+            aria-label="Toggle menu"
+            className="md:hidden flex-shrink-0 rounded-md border-2 border-pixel-border bg-pixel-panel p-2 shadow-pixel"
+            onClick={toggleSidebar}
+          >
+            <span className="flex flex-col gap-1">
+              <span className="block h-0.5 w-5 bg-pixel-accent"></span>
+              <span className="block h-0.5 w-5 bg-pixel-accent"></span>
+              <span className="block h-0.5 w-5 bg-pixel-accent"></span>
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Mobile-only Resource Bar */}
@@ -502,6 +536,61 @@ if (Math.random() < EVENT_CHANCE) {
           />
         </div>
       </main>
+      <div
+        className={`fixed inset-0 z-40 md:hidden ${isSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        aria-hidden={!isSidebarOpen}
+      >
+        <div
+          className={`absolute inset-0 bg-black/60 transition-opacity duration-200 ${isSidebarOpen ? 'opacity-70' : 'opacity-0'}`}
+          onClick={closeSidebar}
+        ></div>
+        <div
+          id="mobile-sidebar"
+          className={`absolute right-0 top-0 h-full w-64 max-w-[75vw] bg-pixel-panel border-l-2 border-pixel-border shadow-[0_0_30px_rgba(0,0,0,0.9)] p-0 transition-transform duration-200 ${
+            isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between border-b-2 border-pixel-border p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-pixel-accent">Menu</p>
+            <button
+              type="button"
+              aria-label="Close sidebar"
+              onClick={closeSidebar}
+              className="text-pixel-accent text-2xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex h-full flex-col justify-between min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 text-xs text-pixel-console-text">
+              <p className="text-pixel-text/60 text-[11px] leading-relaxed">
+                Soon
+              </p>
+            </div>
+            <div className="sticky bottom-0 border-t border-pixel-border bg-pixel-panel/70 p-4 backdrop-blur-sm">
+              <button
+                onMouseDown={handleResetHoldStart}
+                onMouseUp={handleResetHoldEnd}
+                onMouseLeave={handleResetHoldEnd}
+                onTouchStart={(e) => { e.preventDefault(); handleResetHoldStart(e); }}
+                onTouchEnd={(e) => { e.preventDefault(); handleResetHoldEnd(e); }}
+                onTouchCancel={(e) => { e.preventDefault(); handleResetHoldEnd(e); }}
+                className="relative w-full overflow-hidden px-3 py-2 bg-red-700 text-pixel-bg font-bold shadow-pixel hover:bg-red-600 active:shadow-pixel-inset active:translate-y-px transition-colors text-xs"
+              >
+                {resetProgress > 0 && (
+                  <div
+                    className="absolute top-0 left-0 h-full bg-pixel-accent/50"
+                    style={{ width: `${resetProgress}%` }}
+                  />
+                )}
+                <span className="relative">
+                  {resetProgress > 0 ? 'Resetting...' : 'Reset Progress'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
     </div>
   );

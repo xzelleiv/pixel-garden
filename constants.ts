@@ -69,7 +69,7 @@ export const EVENTS: EventDefinition[] = [
     },
     {
         id: 'changeToSpring',
-        description: "Cherry Blossoms are sprouting, Spring is here.",
+        description: "Spring is here.",
         weight: 0.4,
         apply: (gs) => {
             gs.currentSeason = 'spring';
@@ -89,7 +89,7 @@ export const EVENTS: EventDefinition[] = [
     },
     {
         id: 'changeToAutumn',
-        description: "The leaves turn golden. Autumn has arrived.",
+        description: "Autumn has arrived.",
         weight: 0.6,
         apply: (gs) => {
             gs.currentSeason = 'autumn';
@@ -99,7 +99,7 @@ export const EVENTS: EventDefinition[] = [
     },
     {
         id: 'changeToWinter',
-        description: "A chill is in the air. Winter has come.",
+        description: "Winter has come.",
         weight: 0.3,
         apply: (gs) => {
             gs.currentSeason = 'winter';
