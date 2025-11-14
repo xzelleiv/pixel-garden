@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/pixel-garden/dev-sw.js?dev-sw', { scope: '/pixel-garden/', type: 'classic' })

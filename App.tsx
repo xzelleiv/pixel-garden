@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { GameState, PlotTile, Resources, UpgradeDefinition, Season } from './types';
-import { INITIAL_GAME_STATE, UPGRADES, PLANTING_MILESTONES, getUpgradeCost, getUpgradeEffect, EVENTS, TREE_LIFESPAN_SEEDS, SEASON_MULTIPLIERS, SEASON_DURATION, formatNumber } from './constants';
+import { GameState, PlotTile, Preferences } from './types';
+import { INITIAL_GAME_STATE, UPGRADES, PLANTING_MILESTONES, getUpgradeCost, getUpgradeEffect, EVENTS, TREE_LIFESPAN_SEEDS, SEASON_MULTIPLIERS, SEASON_DURATION, formatNumber, SEASON_TIPS, MILESTONE_REWARDS, getUpgradeMilestoneRequirement } from './constants';
 import { useGameLoop } from './hooks/useGameLoop';
 import Plot from './components/Plot';
 import ControlPanel from './components/ControlPanel';
@@ -8,7 +8,9 @@ import LogPanel from './components/LogPanel';
 import DebugPanel from './components/DebugPanel';
 import InfoPanel from './components/InfoPanel';
 import TitleScreen from './components/TitleScreen';
+import SettingsPage from './components/SettingsPage';
 import { SeedIcon } from './components/icons';
+import ConfettiLayer, { ConfettiBurst } from './components/ConfettiLayer';
 
 const SAVE_KEY = 'pixelGardenSave';
 type AudioTrack = 'title' | 'main' | 'none';
@@ -24,6 +26,18 @@ const getAssetUrl = (assetPath: string) => {
   const normalizedBase = base.endsWith('/') ? base : `${base}/`;
   const normalizedPath = assetPath.startsWith('/') ? assetPath.slice(1) : assetPath;
   return `${normalizedBase}${normalizedPath}`;
+};
+
+const BASE_EVENT_CHANCE = 0.002;
+const BASE_PLANTING_INCREMENT = 5;
+const MIN_PLANTING_INCREMENT = 1;
+const CONFETTI_COLORS = ['#ff6b6b', '#ffd93d', '#6c5ce7', '#00cec9', '#f8a5c2', '#ff9f43'];
+const LOG_THROTTLE_MS = 7000;
+
+const calculatePlantingCost = (treeCount: number, baseCost: number, seedVaultLevel: number): number => {
+  const discountPerTree = seedVaultLevel > 0 ? getUpgradeEffect('seedVault', seedVaultLevel) : 0;
+  const incrementalCost = Math.max(MIN_PLANTING_INCREMENT, BASE_PLANTING_INCREMENT - discountPerTree);
+  return baseCost + (treeCount * incrementalCost);
 };
 
 const App: React.FC = () => {
@@ -52,8 +66,16 @@ const App: React.FC = () => {
             ...INITIAL_GAME_STATE.notifiedAvailable,
             ...(parsedGame.notifiedAvailable || {}),
           },
+          preferences: {
+            ...INITIAL_GAME_STATE.preferences,
+            ...(parsedGame.preferences || {}),
+          },
+          milestoneBonuses: {
+            ...INITIAL_GAME_STATE.milestoneBonuses,
+            ...(parsedGame.milestoneBonuses || {}),
+          },
         };
-        // Safely set peakSeeds
+        // set peakSeeds
         mergedState.peakSeeds = Math.max(
           mergedState.peakSeeds || 0,
           mergedState.resources.seeds || 0
@@ -67,6 +89,7 @@ const App: React.FC = () => {
   });
 
   const [hasStarted, setHasStarted] = useState<boolean>(false);
+  const [confettiBursts, setConfettiBursts] = useState<ConfettiBurst[]>([]);
 
   const [logs, setLogs] = useState<string[]>(['Welcome to Pixel Garden...']);
   const [clearProgress, setClearProgress] = useState(0);
@@ -75,11 +98,16 @@ const App: React.FC = () => {
   const [resetProgress, setResetProgress] = useState(0);
   const resetTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileMilestoneOpen, setIsMobileMilestoneOpen] = useState(false);
   const titleAudioRef = useRef<HTMLAudioElement | null>(null);
   const mainAudioRef = useRef<HTMLAudioElement | null>(null);
   const [currentTrack, setCurrentTrack] = useState<AudioTrack>('title');
   const [awaitingUserGesture, setAwaitingUserGesture] = useState(false);
   const awaitingUserGestureRef = useRef(false);
+  const [audioVolume, setAudioVolume] = useState(0.65);
+  const preferencesRef = useRef<Preferences>(gameState.preferences);
+  const confettiTimeoutsRef = useRef<number[]>([]);
+  const throttledLogsRef = useRef<Record<string, number>>({});
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -90,6 +118,20 @@ const App: React.FC = () => {
       console.error("Failed to save game:", error);
     }
   }, [gameState]);
+
+  useEffect(() => {
+    preferencesRef.current = gameState.preferences;
+  }, [gameState.preferences]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === 'undefined') return;
+      confettiTimeoutsRef.current.forEach(timeoutId => {
+        window.clearTimeout(timeoutId);
+      });
+      confettiTimeoutsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -113,6 +155,10 @@ const App: React.FC = () => {
       document.body.style.overflow = '';
     };
   }, [isSidebarOpen]);
+
+  useEffect(() => {
+    setIsMobileMilestoneOpen(false);
+  }, [gameState.totalTreesPlanted]);
 
   const markAwaitingGesture = useCallback(() => {
     if (awaitingUserGestureRef.current) return;
@@ -149,18 +195,32 @@ const App: React.FC = () => {
     [attemptPlayback, clearAwaitsGesture, currentTrack]
   );
 
+  const handleAudioVolumeChange = useCallback((value: number) => {
+    setAudioVolume(value);
+  }, []);
+
+  const handlePreferenceChange = useCallback(<K extends keyof Preferences,>(key: K, value: Preferences[K]) => {
+    setGameState(prev => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        [key]: value,
+      }
+    }));
+  }, []);
+
   useEffect(() => {
     const titleAudio = titleAudioRef.current;
     if (titleAudio) {
       titleAudio.loop = true;
-      titleAudio.volume = 0.65;
+      titleAudio.volume = audioVolume;
     }
     const mainAudio = mainAudioRef.current;
     if (mainAudio) {
       mainAudio.loop = true;
-      mainAudio.volume = 0.6;
+      mainAudio.volume = audioVolume;
     }
-  }, []);
+  }, [audioVolume]);
 
   useEffect(() => {
     if (currentTrack === 'title') {
@@ -202,18 +262,69 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const logWithThrottle = useCallback((key: string, message: string, interval: number = LOG_THROTTLE_MS) => {
+    const now = Date.now();
+    const last = throttledLogsRef.current[key] ?? 0;
+    if (now - last >= interval) {
+      addLog(message);
+      throttledLogsRef.current[key] = now;
+    }
+  }, [addLog]);
+
   const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
   
-  const manualSeedGain = useMemo(() => getUpgradeEffect('gloves', gameState.upgrades.gloves.level), [gameState.upgrades.gloves.level]);
+  const manualSeedGain = useMemo(() => {
+    const gloves = getUpgradeEffect('gloves', gameState.upgrades.gloves.level);
+    const sunCore = getUpgradeEffect('sunCore', gameState.upgrades.sunCore?.level ?? 0);
+    const milestoneBonus = gameState.milestoneBonuses?.gatherBonus ?? 0;
+    return gloves + sunCore + milestoneBonus;
+  }, [gameState.upgrades.gloves.level, gameState.upgrades.sunCore?.level, gameState.milestoneBonuses]);
   const seedGenerationRate = useMemo(() => getUpgradeEffect('betterSoil', gameState.upgrades.betterSoil.level), [gameState.upgrades.betterSoil.level]);
   const compostBonus = useMemo(() => getUpgradeEffect('shovel', gameState.upgrades.shovel.level) + getUpgradeEffect('composter', gameState.upgrades.composter.level), [gameState.upgrades.shovel.level, gameState.upgrades.composter.level]);
+  const typingSpeed = gameState.preferences.reducedMotion ? 0 : 20;
+
+  const createConfettiBurst = useCallback((intensity: number): ConfettiBurst => {
+    const particleCount = Math.min(80, 12 + Math.floor(intensity * 6));
+    const burstId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const particles = Array.from({ length: particleCount }, (_, index) => {
+      const size = 5 + Math.random() * 6;
+      return {
+        id: `${burstId}-${index}`,
+        left: Math.random() * 100,
+        topOffset: Math.random() * 10 - 5,
+        size,
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        duration: 1200 + Math.random() * 900,
+        delay: Math.random() * 200,
+        drift: (Math.random() - 0.5) * 30,
+        rotationStart: Math.random() * 360,
+        rotationEnd: 540 + Math.random() * 720,
+      };
+    });
+    return { id: burstId, particles };
+  }, []);
+
+  const triggerConfettiBurst = useCallback((intensity: number) => {
+    if (typeof window === 'undefined') return;
+    const burst = createConfettiBurst(intensity);
+    setConfettiBursts(prev => [...prev, burst]);
+    const timeoutId = window.setTimeout(() => {
+      setConfettiBursts(prev => prev.filter(entry => entry.id !== burst.id));
+      confettiTimeoutsRef.current = confettiTimeoutsRef.current.filter(id => id !== timeoutId);
+    }, 2000);
+    confettiTimeoutsRef.current.push(timeoutId);
+  }, [createConfettiBurst]);
 
 
   const gameTick = useCallback(() => {
     setGameState(prev => {
       let mutableState: GameState = JSON.parse(JSON.stringify(prev)); // Deep copy for mutation
-      const healthyTreesCount = mutableState.plot.filter(t => t.hasTree && !t.isWithered).length;
+      const seedVaultLevel = mutableState.upgrades.seedVault?.level ?? 0;
+      const weatherStationLevel = mutableState.upgrades.weatherStation?.level ?? 0;
+      const sprinklerLevel = mutableState.upgrades.sprinklers?.level ?? 0;
+      const sprinklerChance = sprinklerLevel > 0 ? getUpgradeEffect('sprinklers', sprinklerLevel) : 0;
+      const seasonTipsEnabled = Boolean(mutableState.preferences?.seasonTips);
 
       // --- Season Handling ---
       if (mutableState.seasonDuration > 0) {
@@ -222,58 +333,68 @@ const App: React.FC = () => {
           // When a season ends, revert to summer
           mutableState.currentSeason = 'summer';
           addLog("The season returns to summer.");
+          if (seasonTipsEnabled) {
+            addLog(SEASON_TIPS.summer);
+          }
       }
 
       // --- Event Handling ---
-      const EVENT_CHANCE = 0.002; // 2% chance per second
-if (Math.random() < EVENT_CHANCE) {
-    const possibleEvents = EVENTS.filter(event => {
-        if (event.id === 'bountifulHarvest' && healthyTreesCount === 0) return false;
-        // Prevent changing to the same season
-        if (event.id.startsWith('changeTo') && mutableState.currentSeason === event.id.replace('changeTo', '').toLowerCase()) return false;
-        // Prevent overlapping season changes (only allow if current season duration has expired)
-        if (event.id.startsWith('changeTo') && mutableState.seasonDuration > 0) return false;
-        return true;
-    });
-    if (possibleEvents.length > 0) {
-        const totalWeight = possibleEvents.reduce((sum, event) => sum + event.weight, 0);
-        let random = Math.random() * totalWeight;
-        const triggeredEvent = possibleEvents.find(event => {
+  const stormSatelliteBonus = getUpgradeEffect('stormSatellite', mutableState.upgrades.stormSatellite?.level ?? 0);
+  const eventChance = BASE_EVENT_CHANCE + (weatherStationLevel * 0.0005) + stormSatelliteBonus;
+      if (Math.random() < eventChance) {
+        const possibleEvents = EVENTS.filter(event => (!event.canTrigger || event.canTrigger(mutableState)));
+        if (possibleEvents.length > 0) {
+          const totalWeight = possibleEvents.reduce((sum, event) => sum + event.weight, 0);
+          let random = Math.random() * totalWeight;
+          const triggeredEvent = possibleEvents.find(event => {
             random -= event.weight;
             return random < 0;
-        });
-        if (triggeredEvent) {
+          });
+          if (triggeredEvent) {
             addLog(triggeredEvent.description);
             mutableState = triggeredEvent.apply(mutableState);
+            if (triggeredEvent.id.startsWith('changeTo')) {
+              const extraDuration = weatherStationLevel > 0 ? getUpgradeEffect('weatherStation', weatherStationLevel) : 0;
+              mutableState.seasonDuration += extraDuration;
+              if (seasonTipsEnabled) {
+                const tip = SEASON_TIPS[mutableState.currentSeason];
+                if (tip) addLog(tip);
+              }
+            }
+          }
         }
-    }
-}
+      }
       
       // --- Automation ---
       const autoPlanterLevel = mutableState.upgrades.autoPlanter.level;
       if (autoPlanterLevel > 0) {
-          mutableState.autoPlanterCooldown -= 1;
-          if (mutableState.autoPlanterCooldown <= 0) {
-              const emptyTile = mutableState.plot.find(t => !t.hasTree);
-              const treeCount = mutableState.plot.filter(t => t.hasTree).length;
-              const plotCapacity = mutableState.plot.length;
-              const currentPlantingCost = mutableState.costs.tree + (treeCount * 5);
+      const hasEmptyTile = mutableState.plot.some(t => !t.hasTree);
+      if (!hasEmptyTile) {
+      mutableState.autoPlanterCooldown = getUpgradeEffect('autoPlanter', autoPlanterLevel);
+      } else {
+      mutableState.autoPlanterCooldown -= 1;
+      if (mutableState.autoPlanterCooldown <= 0) {
+        const emptyTile = mutableState.plot.find(t => !t.hasTree);
+        const treeCount = mutableState.plot.filter(t => t.hasTree).length;
+        const plotCapacity = mutableState.plot.length;
+        const currentPlantingCost = calculatePlantingCost(treeCount, mutableState.costs.tree, seedVaultLevel);
 
-              if (emptyTile && treeCount < plotCapacity && mutableState.resources.seeds >= currentPlantingCost) {
-                  mutableState.resources.seeds -= currentPlantingCost;
-                  emptyTile.hasTree = true;
+        if (emptyTile && treeCount < plotCapacity && mutableState.resources.seeds >= currentPlantingCost) {
+          mutableState.resources.seeds -= currentPlantingCost;
+          emptyTile.hasTree = true;
 
-                  // Fertilizer logic
-                  const fertilizerChance = getUpgradeEffect('fertilizer', mutableState.upgrades.fertilizer.level);
-                  if (Math.random() * 100 < fertilizerChance) {
-                      emptyTile.isGolden = true;
-                      addLog("Fertilizer worked! A golden sapling grew, producing extra seeds.");
-                  }
-                  
-                  addLog("Auto Planter planted a new tree.");
-              }
-              mutableState.autoPlanterCooldown = getUpgradeEffect('autoPlanter', autoPlanterLevel);
+          // Fertilizer logic
+          const fertilizerChance = getUpgradeEffect('fertilizer', mutableState.upgrades.fertilizer.level);
+          if (Math.random() * 100 < fertilizerChance) {
+            emptyTile.isGolden = true;
+            addLog("Fertilizer worked! A golden sapling grew, producing extra seeds.");
           }
+                    
+          logWithThrottle('autoPlanter', 'Auto Planter planted a new tree.');
+        }
+        mutableState.autoPlanterCooldown = getUpgradeEffect('autoPlanter', autoPlanterLevel);
+      }
+      }
       }
       
       const autoShovelLevel = mutableState.upgrades.autoShovel.level;
@@ -295,11 +416,33 @@ if (Math.random() < EVENT_CHANCE) {
                   if (wasDiamond) currentCompostBonus *= 10;
                   else if (wasGolden) currentCompostBonus *= 5;
                   mutableState.resources.seeds += currentCompostBonus;
-                  addLog("Auto Shovel cleared a withered tree.");
+          logWithThrottle('autoShovel', 'Auto Shovel cleared a withered tree.');
               }
               mutableState.autoShovelCooldown = getUpgradeEffect('autoShovel', autoShovelLevel);
            }
        }
+
+      const gnomeLevel = mutableState.upgrades.gnomeInterns?.level ?? 0;
+      if (gnomeLevel > 0) {
+        const gnomeChance = getUpgradeEffect('gnomeInterns', gnomeLevel);
+        if (gnomeChance > 0 && Math.random() * 100 < gnomeChance) {
+          const emptyTile = mutableState.plot.find(t => !t.hasTree);
+          if (emptyTile) {
+            emptyTile.hasTree = true;
+            emptyTile.isWithered = false;
+            emptyTile.seedsGenerated = 0;
+            const lucky = Math.random() < 0.18;
+            emptyTile.isGolden = lucky;
+            emptyTile.isDiamond = false;
+            mutableState.totalTreesPlanted += 1;
+            addLog(lucky ? 'Gnome interns planted a shiny tree for free.' : 'Gnome interns planted a free tree.');
+          } else {
+            const spareSeeds = 10 + (gnomeLevel * 5);
+            mutableState.resources.seeds += spareSeeds;
+            addLog('Gnome interns dropped off spare seeds.');
+          }
+        }
+      }
 
       // --- Regular Tick Logic ---
       let seedsGained = 0;
@@ -318,8 +461,16 @@ if (Math.random() < EVENT_CHANCE) {
           seedsGained += seedsThisTick;
           tile.seedsGenerated += seedsThisTick;
           if (tile.seedsGenerated >= mutableState.treeLifespanSeeds) {
-            tile.isWithered = true;
-            witheredCountThisTick++;
+            const savedBySprinklers = sprinklerChance > 0 && Math.random() * 100 < sprinklerChance;
+            if (savedBySprinklers) {
+              tile.seedsGenerated = Math.floor(mutableState.treeLifespanSeeds * 0.5);
+              if (Math.random() < 0.2) {
+                addLog('Sprinklers saved a tree from withering.');
+              }
+            } else {
+              tile.isWithered = true;
+              witheredCountThisTick++;
+            }
           }
         }
       });
@@ -352,18 +503,33 @@ if (Math.random() < EVENT_CHANCE) {
   useGameLoop(gameTick, hasStarted ? 1000 : null);
 
   const handleAction = useCallback((action: string) => {
+    let triggeredConfettiLevel: number | null = null;
     setGameState(prev => {
         const newState: GameState = JSON.parse(JSON.stringify(prev));
         const treeCount = newState.plot.filter(t => t.hasTree).length;
 
         switch(action) {
             case 'gatherSeeds': {
-                newState.resources.seeds += getUpgradeEffect('gloves', newState.upgrades.gloves.level);
+        const glovesGain = getUpgradeEffect('gloves', newState.upgrades.gloves.level);
+        const sunCoreGain = getUpgradeEffect('sunCore', newState.upgrades.sunCore?.level ?? 0);
+        const milestoneBonus = newState.milestoneBonuses?.gatherBonus ?? 0;
+        newState.resources.seeds += glovesGain + sunCoreGain + milestoneBonus;
+        const confettiLevel = newState.upgrades.confettiCannon?.level ?? 0;
+        if (confettiLevel > 0) {
+          const confettiChance = getUpgradeEffect('confettiCannon', confettiLevel);
+          if (Math.random() * 100 < confettiChance) {
+            const confettiBonus = 5 + (confettiLevel * 3);
+            newState.resources.seeds += confettiBonus;
+            addLog(`Confetti cannon popped for +${confettiBonus} seeds.`);
+            triggeredConfettiLevel = confettiLevel;
+          }
+        }
                 break;
             }
             case 'plantTree': {
                 const plotCapacity = newState.plot.length;
-                const currentPlantingCost = newState.costs.tree + (treeCount * 5);
+        const seedVaultLevel = newState.upgrades.seedVault?.level ?? 0;
+        const currentPlantingCost = calculatePlantingCost(treeCount, newState.costs.tree, seedVaultLevel);
                 const emptyTile = newState.plot.find(t => !t.hasTree);
                 if (emptyTile && treeCount < plotCapacity && newState.resources.seeds >= currentPlantingCost) {
                     newState.resources.seeds -= currentPlantingCost;
@@ -380,6 +546,18 @@ if (Math.random() < EVENT_CHANCE) {
                     const milestone = PLANTING_MILESTONES.find(m => m === newState.totalTreesPlanted);
                     if (milestone && !newState.loggedMilestones[`planted${milestone}`]) {
                        addLog(milestone === 1 ? "Planted your first tree." : `Planted ${milestone} trees.`);
+                       const rewards = MILESTONE_REWARDS[milestone];
+                       if (rewards) {
+                         rewards.forEach(reward => {
+                           if (reward.type === 'gatherBonus') {
+                             if (!newState.milestoneBonuses) {
+                               newState.milestoneBonuses = { gatherBonus: 0 };
+                             }
+                             newState.milestoneBonuses.gatherBonus += reward.amount;
+                           }
+                           addLog(reward.message);
+                         });
+                       }
                        newState.loggedMilestones[`planted${milestone}`] = true;
                     }
                 }
@@ -416,7 +594,10 @@ if (Math.random() < EVENT_CHANCE) {
         newState.peakSeeds = Math.max(newState.peakSeeds || 0, newState.resources.seeds);
         return newState;
     });
-  }, [addLog]);
+    if (triggeredConfettiLevel !== null && !preferencesRef.current.disableConfetti) {
+      triggerConfettiBurst(triggeredConfettiLevel);
+    }
+  }, [addLog, triggerConfettiBurst]);
   
   const handleClearHoldStart = useCallback(() => {
     if (gameState.upgrades.shovel.level > 0) return;
@@ -447,9 +628,14 @@ if (Math.random() < EVENT_CHANCE) {
   }, []);
 
   const canAffordUpgrade = useCallback((upgradeId: string): boolean => {
-    const cost = getUpgradeCost(upgradeId, gameState.upgrades[upgradeId].level);
-    return gameState.resources.seeds >= cost;
-  }, [gameState.resources, gameState.upgrades]);
+    const currentLevel = gameState.upgrades[upgradeId].level;
+    const targetLevel = currentLevel + 1;
+    const cost = getUpgradeCost(upgradeId, currentLevel);
+    if ((gameState.resources.seeds ?? 0) < cost) return false;
+    const requiredMilestone = getUpgradeMilestoneRequirement(upgradeId, targetLevel);
+    if (requiredMilestone && gameState.totalTreesPlanted < requiredMilestone) return false;
+    return true;
+  }, [gameState.resources, gameState.upgrades, gameState.totalTreesPlanted]);
 
   const handleBuyUpgrade = useCallback((upgradeId: string) => {
     if (!canAffordUpgrade(upgradeId)) return;
@@ -479,9 +665,11 @@ if (Math.random() < EVENT_CHANCE) {
             newState.plot.push(...newTiles);
         }
 
-        if (upgradeId === 'cleanseSoil') {
-            newState.treeLifespanSeeds = TREE_LIFESPAN_SEEDS + getUpgradeEffect('cleanseSoil', newState.upgrades.cleanseSoil.level);
-        }
+    if (upgradeId === 'cleanseSoil' || upgradeId === 'greenhouse') {
+      const cleanseBonus = getUpgradeEffect('cleanseSoil', newState.upgrades.cleanseSoil.level);
+      const greenhouseBonus = getUpgradeEffect('greenhouse', newState.upgrades.greenhouse?.level ?? 0);
+      newState.treeLifespanSeeds = TREE_LIFESPAN_SEEDS + cleanseBonus + greenhouseBonus;
+    }
         
         return newState;
     });
@@ -535,6 +723,15 @@ if (Math.random() < EVENT_CHANCE) {
     };
   }, [gameState.plot, seedGenerationRate, gameState.currentSeason]);
 
+  const nextMilestoneValue = useMemo(
+    () => PLANTING_MILESTONES.find(m => m > gameState.totalTreesPlanted),
+    [gameState.totalTreesPlanted]
+  );
+  const nextMilestoneRewards = useMemo(
+    () => (nextMilestoneValue ? MILESTONE_REWARDS[nextMilestoneValue] : undefined),
+    [nextMilestoneValue]
+  );
+
   const handleStartGame = useCallback(() => {
     setCurrentTrack('main');
     setHasStarted(true);
@@ -551,14 +748,14 @@ if (Math.random() < EVENT_CHANCE) {
       <div className="w-full max-w-7xl flex-shrink-0 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
-            <LogPanel logs={logs} />
+            <LogPanel logs={logs} typingSpeed={typingSpeed} compact={gameState.preferences.compactLogs} />
           </div>
           <button
             type="button"
             aria-expanded={isSidebarOpen}
             aria-controls="mobile-sidebar"
             aria-label="Toggle menu"
-            className="md:hidden flex-shrink-0 rounded-md border-2 border-pixel-border bg-pixel-panel p-2 shadow-pixel"
+            className="flex-shrink-0 rounded-md border-2 border-pixel-border bg-pixel-panel p-2 shadow-pixel"
             onClick={toggleSidebar}
           >
             <span className="flex flex-col gap-1">
@@ -570,17 +767,44 @@ if (Math.random() < EVENT_CHANCE) {
         </div>
       </div>
 
-      {/* Mobile-only Resource Bar */}
+      {/* Mobile-only Resource & Milestone Toggle */}
       <div className="w-full max-w-7xl px-2 mb-2 md:hidden">
-        <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel p-1 flex items-center justify-center gap-2">
-          <SeedIcon />
-          <span className="text-pixel-accent font-bold text-base">{formatNumber(gameState.resources.seeds || 0)}</span>
+        <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel p-1 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <SeedIcon />
+            <span className="text-pixel-accent font-bold text-base">{formatNumber(gameState.resources.seeds || 0)}</span>
+          </div>
+          {nextMilestoneValue && (
+            <button
+              type="button"
+              onClick={() => setIsMobileMilestoneOpen(prev => !prev)}
+              className="flex items-center justify-center rounded border border-pixel-border bg-pixel-panel/60 px-2 py-1 text-lg leading-none text-pixel-accent shadow-pixel"
+              aria-expanded={isMobileMilestoneOpen}
+              aria-label={isMobileMilestoneOpen ? 'Hide milestone details' : 'Show milestone details'}
+            >
+              {isMobileMilestoneOpen ? '−' : '+'}
+            </button>
+          )}
         </div>
+        {nextMilestoneValue && isMobileMilestoneOpen && (
+          <div className="mt-2 rounded-lg border-2 border-pixel-border bg-pixel-panel/80 px-3 py-2 text-[11px] leading-snug text-pixel-text/80">
+            <p>
+              Plant <span className="text-pixel-accent">{Math.max(0, nextMilestoneValue - gameState.totalTreesPlanted)}</span> more tree{Math.max(0, nextMilestoneValue - gameState.totalTreesPlanted) === 1 ? '' : 's'} to unlock:
+            </p>
+            <ul className="mt-2 space-y-1 list-disc list-inside text-pixel-text/70">
+              {(nextMilestoneRewards ?? []).map((reward, index) => (
+                <li key={`mobile-reward-${reward.type}-${index}`}>{reward.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       
       <main className="w-full max-w-7xl flex-grow flex flex-col md:grid md:grid-cols-3 lg:grid-cols-6 gap-6 min-h-0 mt-1 md:mt-0">
         <div className="hidden lg:block lg:col-span-1 md:h-full">
-            <InfoPanel upgrades={gameState.upgrades} />
+            <InfoPanel
+              upgrades={gameState.upgrades}
+            />
         </div>
         
         <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 md:h-full">
@@ -611,11 +835,16 @@ if (Math.random() < EVENT_CHANCE) {
             resetProgress={resetProgress}
             onResetHoldStart={handleResetHoldStart}
             onResetHoldEnd={handleResetHoldEnd}
+            nextMilestone={nextMilestoneValue ? {
+              value: nextMilestoneValue,
+              rewards: nextMilestoneRewards ?? [],
+              currentCount: gameState.totalTreesPlanted,
+            } : null}
           />
         </div>
       </main>
       <div
-        className={`fixed inset-0 z-40 md:hidden ${isSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className={`fixed inset-0 z-40 ${isSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
         aria-hidden={!isSidebarOpen}
       >
         <div
@@ -628,22 +857,25 @@ if (Math.random() < EVENT_CHANCE) {
             isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
-          <div className="flex items-center justify-between border-b-2 border-pixel-border p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-pixel-accent">Menu</p>
-            <button
-              type="button"
-              aria-label="Close sidebar"
-              onClick={closeSidebar}
-              className="text-pixel-accent text-2xl leading-none"
-            >
-              ×
-            </button>
-          </div>
           <div className="flex h-full flex-col justify-between min-h-0">
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 text-xs text-pixel-console-text">
-              <p className="text-pixel-text/60 text-[11px] leading-relaxed">
-                Soon
-              </p>
+            <div className="flex items-center justify-between border-b-2 border-pixel-border p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-pixel-accent">Menu</p>
+              <button
+                type="button"
+                aria-label="Close sidebar"
+                onClick={closeSidebar}
+                className="text-pixel-accent text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+              <SettingsPage
+                audioVolume={audioVolume}
+                onAudioVolumeChange={handleAudioVolumeChange}
+                preferences={gameState.preferences}
+                onPreferenceChange={handlePreferenceChange}
+              />
             </div>
             <div className="sticky bottom-0 border-t border-pixel-border bg-pixel-panel/70 p-4 backdrop-blur-sm">
               <button
@@ -669,6 +901,9 @@ if (Math.random() < EVENT_CHANCE) {
           </div>
         </div>
       </div>
+      {!gameState.preferences.disableConfetti && (
+        <ConfettiLayer bursts={confettiBursts} />
+      )}
   <audio ref={titleAudioRef} src={getAssetUrl('audio/titlescreen.mp3')} preload="auto" />
   <audio ref={mainAudioRef} src={getAssetUrl('audio/mainbg.mp3')} preload="auto" />
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}

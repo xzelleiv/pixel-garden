@@ -1,10 +1,17 @@
 
-import React, { useState, useCallback, useRef } from 'react';
-import { GameState, Resources, UpgradeDefinition } from '../types';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { GameState, Resources, UpgradeDefinition, MilestoneReward } from '../types';
 import { SeedIcon } from './icons';
-import { UPGRADES, getUpgradeCost, getUpgradeEffect, formatNumber, SEASON_MULTIPLIERS } from '../constants';
+import { UPGRADES, getUpgradeCost, getUpgradeEffect, formatNumber, SEASON_MULTIPLIERS, getUpgradeMilestoneRequirement } from '../constants';
 
 type Tab = 'Actions' | 'Upgrades' | 'Stats';
+
+const UPGRADE_SECTIONS: Array<{ title: string; upgradeIds: string[] }> = [
+  { title: 'Tools', upgradeIds: ['gloves', 'shovel', 'confettiCannon'] },
+  { title: 'Cultivation', upgradeIds: ['betterSoil', 'composter', 'cleanseSoil', 'fertilizer', 'sprinklers', 'sunCore'] },
+  { title: 'Expansion', upgradeIds: ['expandPlot', 'seedVault', 'greenhouse'] },
+  { title: 'Automation', upgradeIds: ['autoPlanter', 'autoShovel', 'weatherStation', 'stormSatellite', 'gnomeInterns'] },
+];
 
 const ResourceItem: React.FC<{ icon: React.ReactNode; label: string; value: number; rate: number }> = ({ icon, label, value, rate }) => (
   <div className="flex items-center justify-between p-1">
@@ -34,7 +41,8 @@ const ActionButton: React.FC<{
   onPointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onPointerUp?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onPointerCancel?: (e: React.PointerEvent<HTMLButtonElement>) => void;
-}> = ({ onClick, onMouseDown, onMouseUp, onMouseLeave, onTouchStart, onTouchEnd, onTouchCancel, onPointerDown, onPointerUp, onPointerCancel, children, disabled, cost, progress }) => {
+  compact?: boolean;
+}> = ({ onClick, onMouseDown, onMouseUp, onMouseLeave, onTouchStart, onTouchEnd, onTouchCancel, onPointerDown, onPointerUp, onPointerCancel, children, disabled, cost, progress, compact }) => {
   return (
     <button
       onClick={onClick}
@@ -48,10 +56,10 @@ const ActionButton: React.FC<{
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       disabled={disabled}
-                className={`relative w-full p-2 sm:p-4 bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden touch-action-none`}
+                className={`relative w-full ${compact ? 'p-2' : 'p-2 sm:p-4'} bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden touch-action-none`}
       aria-disabled={disabled}
     >
-      {progress && progress > 0 && (
+      {typeof progress === 'number' && progress > 0 && (
         <div 
           className="absolute top-0 left-0 h-full bg-pixel-accent/75"
           style={{ width: `${progress}%`, transition: 'width 0.05s linear' }}
@@ -70,8 +78,88 @@ const ActionButton: React.FC<{
   );
 };
 
-const UpgradeCard: React.FC<{ upgradeDef: UpgradeDefinition; level: number; onBuy: (id: string) => void; canAfford: boolean }> = ({ upgradeDef, level, onBuy, canAfford }) => {
-    const cost = getUpgradeCost(upgradeDef.id, level);
+const StatusChip: React.FC<{ label: React.ReactNode; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="flex flex-col rounded-md border border-pixel-border/50 bg-pixel-panel/80 px-2 py-1">
+    <span className="text-[10px] uppercase tracking-widest text-pixel-text/60">{label}</span>
+    <span className="text-sm font-bold text-pixel-accent">{value}</span>
+  </div>
+);
+
+const ClassicUpgradeRow: React.FC<{
+  upgradeDef: UpgradeDefinition;
+  level: number;
+  onBuy: (id: string) => void;
+  canAfford: boolean;
+  locked?: boolean;
+  requiredMilestone?: number;
+}> = ({ upgradeDef, level, onBuy, canAfford, locked = false, requiredMilestone }) => {
+  const cost = getUpgradeCost(upgradeDef.id, level);
+  const buttonLabel = locked ? 'Locked' : level > 0 ? 'Upgrade' : 'Buy';
+
+  return (
+    <div className="rounded-lg border border-pixel-border/40 bg-pixel-panel/60 p-2 sm:p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex-1 min-w-0 space-y-1">
+        <p className="text-sm font-bold text-pixel-accent flex items-center gap-2 break-words">
+          {upgradeDef.name}
+          <span className="text-[10px] uppercase tracking-widest text-pixel-text/60">Lv {level}</span>
+        </p>
+        <p className="text-[11px] text-pixel-text/80 leading-snug break-words">{upgradeDef.description(level)}</p>
+        {locked && requiredMilestone && (
+          <p className="text-[10px] uppercase tracking-[0.2em] text-pixel-text/50">Unlocks at {requiredMilestone} trees</p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+        <span className="flex items-center gap-1 text-xs text-pixel-text">
+          <SeedIcon />
+          {formatNumber(cost)}
+        </span>
+        <button
+          onClick={() => onBuy(upgradeDef.id)}
+          disabled={locked || !canAfford}
+          className="px-3 py-1 bg-pixel-tree text-pixel-bg font-bold shadow-pixel hover:bg-green-400 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap text-xs"
+        >
+          {locked && requiredMilestone ? `Plant ${requiredMilestone}` : buttonLabel}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ClassicUpgradeSection: React.FC<{ title: string; upgradeIds: string[]; gameState: GameState; onBuy: (id: string) => void; canAfford: (id: string) => boolean }> = ({ title, upgradeIds, gameState, onBuy, canAfford }) => (
+  <div className="space-y-2">
+    <h3 className="text-xs font-bold uppercase tracking-[0.4em] text-pixel-text/70">{title}</h3>
+    <div className="space-y-2">
+      {upgradeIds.map(id => {
+        const upgradeDef = UPGRADES[id];
+        const level = gameState.upgrades[id].level;
+        const requiredMilestone = getUpgradeMilestoneRequirement(id, level + 1);
+        const locked = requiredMilestone ? gameState.totalTreesPlanted < requiredMilestone : false;
+        return (
+          <ClassicUpgradeRow
+            key={id}
+            upgradeDef={upgradeDef}
+            level={level}
+            onBuy={onBuy}
+            canAfford={canAfford(id)}
+            locked={locked}
+            requiredMilestone={requiredMilestone}
+          />
+        );
+      })}
+    </div>
+  </div>
+);
+
+const UpgradeCard: React.FC<{
+  upgradeDef: UpgradeDefinition;
+  level: number;
+  onBuy: (id: string) => void;
+  canAfford: boolean;
+  locked?: boolean;
+  requiredMilestone?: number;
+}> = ({ upgradeDef, level, onBuy, canAfford, locked = false, requiredMilestone }) => {
+  const cost = getUpgradeCost(upgradeDef.id, level);
+  const buttonLabel = locked ? 'Locked' : level > 0 ? 'Upgrade' : 'Buy';
 
     // icons for specific upgrades
     const ICONS: Record<string, string> = {
@@ -93,6 +181,9 @@ const UpgradeCard: React.FC<{ upgradeDef: UpgradeDefinition; level: number; onBu
             <span className="text-xs text-pixel-text/70">{level + 1}</span>
         </div>
         <p className="text-xs leading-tight text-pixel-text/80">{upgradeDef.description(level)}</p>
+        {locked && requiredMilestone && (
+          <p className="text-[10px] uppercase tracking-[0.2em] text-pixel-text/60 mt-1">Unlocks at {requiredMilestone} trees</p>
+        )}
       </div>
       <div className="w-full flex justify-between items-center mt-1">
         <div className="flex gap-4">
@@ -103,29 +194,53 @@ const UpgradeCard: React.FC<{ upgradeDef: UpgradeDefinition; level: number; onBu
         </div>
         <button
           onClick={() => onBuy(upgradeDef.id)}
-          disabled={!canAfford}
+          disabled={locked || !canAfford}
           className="px-3 py-1 bg-pixel-tree text-pixel-bg font-bold shadow-pixel hover:bg-green-400 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap text-xs"
         >
-          Upgrade
+          {locked && requiredMilestone ? `Plant ${requiredMilestone}` : buttonLabel}
         </button>
       </div>
     </div>
   )};
 
 
-const UpgradeCategory: React.FC<{title: string; upgradeIds: string[]; gameState: GameState; onBuy: (id: string) => void; canAfford: (id: string) => boolean;}> = ({ title, upgradeIds, gameState, onBuy, canAfford }) => (
-  <div>
-    <h3 className="text-lg text-pixel-accent border-b-2 border-pixel-border mb-2 pb-1">{title}</h3>
-    <div className="space-y-2">
-      {upgradeIds.map(id => (
-        <UpgradeCard 
-          key={id}
-          upgradeDef={UPGRADES[id]}
-          level={gameState.upgrades[id].level}
-          onBuy={onBuy}
-          canAfford={canAfford(id)}
-        />
-      ))}
+const UpgradeCategory: React.FC<{
+  title: string;
+  upgradeIds: string[];
+  gameState: GameState;
+  onBuy: (id: string) => void;
+  canAfford: (id: string) => boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+}> = ({ title, upgradeIds, gameState, onBuy, canAfford, isExpanded, onToggle }) => (
+  <div className="border border-pixel-border/30 rounded-lg p-2 bg-pixel-panel/70">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center justify-between text-left font-bold text-pixel-accent md:hidden"
+    >
+      <span>{title}</span>
+      <span className="text-xl leading-none">{isExpanded ? '−' : '+'}</span>
+    </button>
+    <h3 className="hidden md:block text-lg text-pixel-accent border-b-2 border-pixel-border mb-2 pb-1">{title}</h3>
+    <div className={`${isExpanded ? 'block' : 'hidden'} md:block mt-2 md:mt-0 space-y-2`}>
+      {upgradeIds.map(id => {
+        const upgradeDef = UPGRADES[id];
+        const level = gameState.upgrades[id].level;
+        const requiredMilestone = getUpgradeMilestoneRequirement(id, level + 1);
+        const locked = requiredMilestone ? gameState.totalTreesPlanted < requiredMilestone : false;
+        return (
+          <UpgradeCard
+            key={id}
+            upgradeDef={upgradeDef}
+            level={level}
+            onBuy={onBuy}
+            canAfford={canAfford(id)}
+            locked={locked}
+            requiredMilestone={requiredMilestone}
+          />
+        );
+      })}
     </div>
   </div>
 );
@@ -157,6 +272,11 @@ const ControlPanel: React.FC<{
   resetProgress: number;
   onResetHoldStart: (e?: any) => void;
   onResetHoldEnd: (e?: any) => void;
+  nextMilestone: {
+    value: number;
+    rewards: MilestoneReward[];
+    currentCount: number;
+  } | null;
 }> = ({ 
   gameState, 
   onAction, 
@@ -171,18 +291,48 @@ const ControlPanel: React.FC<{
   resetProgress,
   onResetHoldStart,
   onResetHoldEnd,
+  nextMilestone,
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('Actions');
+  const [milestoneOpen, setMilestoneOpen] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() =>
+    UPGRADE_SECTIONS.reduce((acc, section) => {
+      acc[section.title] = section.title === 'Tools';
+      return acc;
+    }, {} as Record<string, boolean>)
+  );
+  useEffect(() => {
+    setMilestoneOpen(false);
+  }, [nextMilestone?.value]);
+  const toggleCategory = useCallback((category: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category],
+    }));
+  }, []);
   const { upgrades, costs, plot } = gameState;
   const holdActiveRef = useRef(false);
   const pointerIdRef = useRef<number | null>(null);
+  const useClassicActions = !!gameState.preferences?.classicActionsUI;
+  const useClassicUpgrades = !!gameState.preferences?.classicUpgradesUI;
 
+  const hasShovel = (upgrades.shovel?.level ?? 0) > 0;
   const treeCount = plot.filter(t => t.hasTree).length;
   const healthyTreeCount = plot.filter(t => t.hasTree && !t.isWithered).length;
   const witheredCount = plot.filter(t => t.isWithered).length;
+  const canClearWithered = witheredCount > 0;
 
   const plotCapacity = plot.length;
-  const currentPlantingCost = costs.tree + (treeCount * 5);
+  const seedVaultLevel = upgrades.seedVault?.level ?? 0;
+  const plantingIncrementReduction = seedVaultLevel > 0 ? getUpgradeEffect('seedVault', seedVaultLevel) : 0;
+  const plantingIncrement = Math.max(1, 5 - plantingIncrementReduction);
+  const currentPlantingCost = costs.tree + (treeCount * plantingIncrement);
+  const autoPlanterInterval = upgrades.autoPlanter?.level > 0 ? getUpgradeEffect('autoPlanter', upgrades.autoPlanter.level) : null;
+  const autoShovelInterval = upgrades.autoShovel?.level > 0 ? getUpgradeEffect('autoShovel', upgrades.autoShovel.level) : null;
+  const milestoneRemaining = nextMilestone ? Math.max(0, nextMilestone.value - nextMilestone.currentCount) : 0;
+  const milestonePercent = nextMilestone && nextMilestone.value > 0
+    ? Math.min(100, Math.round((nextMilestone.currentCount / nextMilestone.value) * 100))
+    : 0;
 
   const handleHoldStart = useCallback((event?: React.SyntheticEvent<HTMLButtonElement>) => {
     if (holdActiveRef.current) return;
@@ -236,6 +386,45 @@ const ControlPanel: React.FC<{
           <div className="space-y-1">
               <ResourceItem icon={<SeedIcon />} label="Seeds" value={resources.seeds || 0} rate={autoGains.seeds || 0} />
           </div>
+          {nextMilestone && (
+            <div className="mt-3 rounded-lg border border-pixel-border/40 bg-pixel-panel/80 p-3 text-[11px] text-pixel-text/80">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.4em] text-pixel-text/50">Next Milestone</p>
+                  <p className="text-pixel-accent font-bold text-sm">{formatNumber(nextMilestone.value)} trees</p>
+                </div>
+                <button
+                  type="button"
+                  aria-expanded={milestoneOpen}
+                  aria-label={milestoneOpen ? 'Hide milestone rewards' : 'Show milestone rewards'}
+                  onClick={() => setMilestoneOpen(prev => !prev)}
+                  className="flex h-7 w-7 items-center justify-center rounded border border-pixel-border bg-pixel-panel text-lg leading-none text-pixel-accent shadow-pixel"
+                >
+                  {milestoneOpen ? '−' : '+'}
+                </button>
+              </div>
+              <div className="mt-2 h-2 w-full rounded-full bg-pixel-border/30 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-pixel-tree via-pixel-accent to-yellow-200"
+                  style={{ width: `${milestonePercent}%` }}
+                />
+              </div>
+              <div className="mt-1 flex items-center justify-between text-[9px] uppercase tracking-[0.3em] text-pixel-text/60">
+                <span>{milestonePercent}%</span>
+                <span>{milestoneRemaining.toLocaleString()} to go</span>
+              </div>
+              {milestoneOpen && (
+                <div className="mt-2 border-t border-pixel-border/30 pt-2">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-pixel-text/60 mb-1">Rewards</p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    {nextMilestone.rewards.map((reward, index) => (
+                      <li key={`milestone-reward-${reward.type}-${index}`}>{reward.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
       </div>
       
       <div className="flex border-b-2 border-pixel-border">
@@ -252,11 +441,37 @@ const ControlPanel: React.FC<{
         ))}
       </div>
 
-      <div className="p-2 lg:p-4 flex-grow flex flex-col overflow-hidden">
-        <div className="flex-grow overflow-y-auto">
+      <div className="p-2 lg:p-4 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className="flex-grow overflow-y-auto min-h-0 pb-4">
           {activeTab === 'Actions' && (
             <div className="space-y-3">
-              <ActionButton onClick={() => onAction('gatherSeeds')} disabled={healthyTreeCount === 0}>
+              {!useClassicActions && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <StatusChip
+                    label="Season"
+                    value={<span className="capitalize">{gameState.currentSeason} · {SEASON_MULTIPLIERS[gameState.currentSeason]}x</span>}
+                  />
+                  <StatusChip
+                    label={
+                      <span>
+                        <span className="sm:hidden">Generation</span>
+                        <span className="hidden sm:inline">GEN</span>
+                      </span>
+                    }
+                    value={`${formatNumber(autoGains.seeds)} /s`}
+                  />
+                  <StatusChip
+                    label="Manual"
+                    value={`${formatNumber(autoGains.manual)} seeds`}
+                  />
+                  <StatusChip
+                    label="Compost"
+                    value={upgrades.shovel?.level > 0 ? `${formatNumber(autoGains.compost)} seeds` : '—'}
+                  />
+                </div>
+              )}
+
+              <ActionButton onClick={() => onAction('gatherSeeds')} disabled={healthyTreeCount === 0} compact>
                 {gatherButtonText}
               </ActionButton>
 
@@ -264,13 +479,14 @@ const ControlPanel: React.FC<{
                 onClick={() => onAction('plantTree')} 
                 disabled={treeCount >= plotCapacity || gameState.resources.seeds < currentPlantingCost} 
                 cost={currentPlantingCost}
+                compact
               >
                 Plant Tree ({treeCount}/{plotCapacity})
               </ActionButton>
 
               <ActionButton
                 onClick={() => {
-                  if (upgrades.shovel?.level > 0) {
+                  if (hasShovel) {
                     onAction('clearWithered');
                   }
                 }}
@@ -282,8 +498,9 @@ const ControlPanel: React.FC<{
                 onPointerDown={handlePointerHoldStart}
                 onPointerUp={handlePointerHoldEnd}
                 onPointerCancel={handlePointerHoldEnd}
-                disabled={witheredCount === 0}
+                disabled={!canClearWithered}
                 progress={clearProgress}
+                compact
               >
                 <span className="flex items-center gap-1">
                   <span>{clearProgress > 0 ? 'Clearing...' : 'Clear Withered'}</span>
@@ -292,15 +509,73 @@ const ControlPanel: React.FC<{
                   )}
                 </span>
               </ActionButton>
+              {!hasShovel && (
+                <p className="text-[10px] text-pixel-text/60 text-center">
+                  Hold the button to clear when shovels are locked.
+                </p>
+              )}
+
+              {!useClassicActions && (upgrades.autoPlanter?.level > 0 || upgrades.autoShovel?.level > 0) && (
+                <div className="hidden md:block rounded-lg border-2 border-pixel-border bg-pixel-panel/70 p-3 text-xs text-pixel-text/80">
+                  <h3 className="text-pixel-accent font-bold mb-2 text-sm tracking-widest">Automation Timers</h3>
+                  <div className="space-y-1">
+                    {upgrades.autoPlanter?.level > 0 && (
+                      <div className="flex justify-between">
+                        <span>Auto Planter</span>
+                        <span className="font-bold text-pixel-text">
+                          {formatTime(Math.max(0, gameState.autoPlanterCooldown))}
+                          {autoPlanterInterval !== null && (
+                            <span className="text-pixel-text/60 text-[10px] ml-1">/ {formatTime(autoPlanterInterval)}</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {upgrades.autoShovel?.level > 0 && (
+                      <div className="flex justify-between">
+                        <span>Auto Shovel</span>
+                        <span className="font-bold text-pixel-text">
+                          {formatTime(Math.max(0, gameState.autoShovelCooldown))}
+                          {autoShovelInterval !== null && (
+                            <span className="text-pixel-text/60 text-[10px] ml-1">/ {formatTime(autoShovelInterval)}</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'Upgrades' && (
             <div className="space-y-3">
-              <UpgradeCategory title="Tools" upgradeIds={['gloves', 'shovel']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-              <UpgradeCategory title="Cultivation" upgradeIds={['betterSoil', 'composter', 'cleanseSoil', 'fertilizer']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-              <UpgradeCategory title="Expansion" upgradeIds={['expandPlot']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
-              <UpgradeCategory title="Automation" upgradeIds={['autoPlanter', 'autoShovel']} gameState={gameState} onBuy={onBuyUpgrade} canAfford={canAffordUpgrade} />
+              {useClassicUpgrades ? (
+                <div className="space-y-4">
+                  {UPGRADE_SECTIONS.map(section => (
+                    <ClassicUpgradeSection
+                      key={section.title}
+                      title={section.title}
+                      upgradeIds={section.upgradeIds}
+                      gameState={gameState}
+                      onBuy={onBuyUpgrade}
+                      canAfford={canAffordUpgrade}
+                    />
+                  ))}
+                </div>
+              ) : (
+                UPGRADE_SECTIONS.map(section => (
+                  <UpgradeCategory
+                    key={section.title}
+                    title={section.title}
+                    upgradeIds={section.upgradeIds}
+                    gameState={gameState}
+                    onBuy={onBuyUpgrade}
+                    canAfford={canAffordUpgrade}
+                    isExpanded={expandedCategories[section.title]}
+                    onToggle={() => toggleCategory(section.title)}
+                  />
+                ))
+              )}
             </div>
           )}
 
@@ -372,8 +647,51 @@ const ControlPanel: React.FC<{
                     <span>Peak Seeds:</span>
                     <span className="font-bold text-pixel-text">{formatNumber(gameState.peakSeeds)} Seeds</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>Plant Cost Step:</span>
+                    <span className="font-bold text-pixel-text">{formatNumber(plantingIncrement)} Seeds</span>
+                  </div>
                 </div>
               </div>
+
+              {nextMilestone && (
+                <div className="pt-2 border-t-2 border-pixel-border">
+                  <h3 className="text-lg text-pixel-accent mb-1">Next Milestone</h3>
+                  <p className="text-xs text-pixel-text/80">
+                    Plant <span className="text-pixel-text font-bold">{nextMilestone.value - gameState.totalTreesPlanted}</span> more tree{nextMilestone.value - gameState.totalTreesPlanted === 1 ? '' : 's'} to reach {formatNumber(nextMilestone.value)} total.
+                  </p>
+                </div>
+              )}
+
+              {useClassicActions && (upgrades.autoPlanter?.level > 0 || upgrades.autoShovel?.level > 0) && (
+                <div className="pt-2 border-t-2 border-pixel-border">
+                  <h3 className="text-lg text-pixel-accent mb-1">Automation</h3>
+                  <div className="text-xs space-y-1 text-pixel-text/80">
+                    {upgrades.autoPlanter?.level > 0 && (
+                      <div className="flex justify-between">
+                        <span>Auto Planter:</span>
+                        <span className="font-bold text-pixel-text">
+                          {formatTime(Math.max(0, gameState.autoPlanterCooldown))}
+                          {autoPlanterInterval !== null && (
+                            <span className="text-pixel-text/60 text-[10px] ml-1">/ {formatTime(autoPlanterInterval)}</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {upgrades.autoShovel?.level > 0 && (
+                      <div className="flex justify-between">
+                        <span>Auto Shovel:</span>
+                        <span className="font-bold text-pixel-text">
+                          {formatTime(Math.max(0, gameState.autoShovelCooldown))}
+                          {autoShovelInterval !== null && (
+                            <span className="text-pixel-text/60 text-[10px] ml-1">/ {formatTime(autoShovelInterval)}</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Credits footer */}
               <div className="mt-4 pt-2 border-t-2 border-pixel-border text-xs text-pixel-text/70">

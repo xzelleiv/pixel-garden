@@ -35,10 +35,10 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ setGameState, addLog }) => {
             ...prev,
             resources: {
                 ...prev.resources,
-                seeds: (prev.resources.seeds || 0) + 1000
+                seeds: (prev.resources.seeds || 0) + 10000
             }
         }));
-        addLog("DEBUG: Added 1000 seeds.");
+        addLog("DEBUG: Added 10000 seeds.");
     };
     
     const handleFillPlot = () => {

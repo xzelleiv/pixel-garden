@@ -26,11 +26,31 @@ export interface UpgradeDefinition {
     costExponent: number;
     baseEffect: number;
     effectFormula: (level: number, base: number) => number;
+    requiresMilestone?: number;
+  perLevelMilestoneProgression?: boolean;
+  levelMilestones?: Record<number, number>;
 }
 
 export type Upgrades = {
     [key: string]: UpgradeDefinition;
 };
+
+export interface MilestoneBonuses {
+  gatherBonus: number;
+}
+
+export type MilestoneReward =
+  | { type: 'gatherBonus'; amount: number; message: string }
+  | { type: 'unlockUpgrade'; upgradeId: string; message: string };
+
+export interface Preferences {
+  reducedMotion: boolean;
+  compactLogs: boolean;
+  seasonTips: boolean;
+  classicActionsUI: boolean;
+  classicUpgradesUI: boolean;
+  disableConfetti: boolean;
+}
 
 export interface GameState {
   resources: Resources;
@@ -50,6 +70,8 @@ export interface GameState {
   autoShovelCooldown: number;
   seasonDuration: number;
   peakSeeds: number;
+  preferences: Preferences;
+  milestoneBonuses: MilestoneBonuses;
 }
 
 export type EventDefinition = {
@@ -57,4 +79,5 @@ export type EventDefinition = {
     description: string;
     weight: number;
     apply: (gameState: GameState) => GameState;
+  canTrigger?: (gameState: GameState) => boolean;
 };
