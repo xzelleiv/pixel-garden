@@ -11,7 +11,6 @@ import TitleScreen from './components/TitleScreen';
 import { SeedIcon } from './components/icons';
 
 const SAVE_KEY = 'pixelGardenSave';
-const START_KEY = 'pixelGardenStarted';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(() => {
@@ -53,16 +52,7 @@ const App: React.FC = () => {
     return INITIAL_GAME_STATE;
   });
 
-  const [hasStarted, setHasStarted] = useState<boolean>(() => {
-    try {
-      if (typeof window === 'undefined') {
-        return true;
-      }
-      return localStorage.getItem(START_KEY) === 'true';
-    } catch {
-      return true;
-    }
-  });
+  const [hasStarted, setHasStarted] = useState<boolean>(false);
 
   const [logs, setLogs] = useState<string[]>(['Welcome to Pixel Garden...']);
   const [clearProgress, setClearProgress] = useState(0);
@@ -71,6 +61,8 @@ const App: React.FC = () => {
   const [resetProgress, setResetProgress] = useState(0);
   const resetTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const titleAudioRef = useRef<HTMLAudioElement | null>(null);
+  const mainAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -81,17 +73,6 @@ const App: React.FC = () => {
       console.error("Failed to save game:", error);
     }
   }, [gameState]);
-
-  useEffect(() => {
-    if (!hasStarted) {
-      return;
-    }
-    try {
-      localStorage.setItem(START_KEY, 'true');
-    } catch (error) {
-      console.error('Failed to persist start flag:', error);
-    }
-  }, [hasStarted]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -115,6 +96,48 @@ const App: React.FC = () => {
       document.body.style.overflow = '';
     };
   }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const audio = titleAudioRef.current;
+    if (!audio) return;
+    audio.loop = true;
+    audio.volume = 0.65;
+
+    if (!hasStarted) {
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.catch(() => {
+          audio.muted = true;
+          audio.play().catch(() => undefined);
+        });
+      }
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, [hasStarted]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const audio = mainAudioRef.current;
+    if (!audio) return;
+    audio.loop = true;
+    audio.volume = 0.6;
+
+    if (hasStarted) {
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.catch(() => {
+          audio.muted = true;
+          audio.play().catch(() => undefined);
+        });
+      }
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, [hasStarted]);
 
   const addLog = useCallback((message: string) => {
     setLogs(prev => {
@@ -424,7 +447,6 @@ if (Math.random() < EVENT_CHANCE) {
 
         if (progress >= 100) {
             localStorage.removeItem(SAVE_KEY);
-            localStorage.removeItem(START_KEY);
             setGameState(INITIAL_GAME_STATE);
             setLogs(['Welcome to Pixel Garden... Progress has been reset.']);
             if (resetTimerRef.current) clearInterval(resetTimerRef.current);
@@ -462,11 +484,12 @@ if (Math.random() < EVENT_CHANCE) {
   const handleStartGame = useCallback(() => {
     setHasStarted(true);
     addLog('Entering the garden...');
+    if (titleAudioRef.current) {
+      titleAudioRef.current.pause();
+      titleAudioRef.current.currentTime = 0;
+    }
+    mainAudioRef.current?.play().catch(() => undefined);
   }, [addLog]);
-
-  if (!hasStarted) {
-    return <TitleScreen onStart={handleStartGame} />;
-  }
 
   return (
     <div className="h-screen font-press-start text-sm p-1 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
@@ -591,7 +614,10 @@ if (Math.random() < EVENT_CHANCE) {
           </div>
         </div>
       </div>
+  <audio ref={titleAudioRef} src="/audio/titlescreen.mp3" preload="auto" />
+  <audio ref={mainAudioRef} src="/audio/mainbg.mp3" preload="auto" />
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
+      {!hasStarted && <TitleScreen onStart={handleStartGame} />}
     </div>
   );
 };
