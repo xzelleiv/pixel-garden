@@ -1,11 +1,17 @@
 import type { FC } from 'react';
 import type { Preferences } from '../types';
+import { GAME_VERSION } from '../constants';
+
+type UpdateStatus = 'idle' | 'checking' | 'ready' | 'upToDate' | 'error';
 
 type SettingsPageProps = {
   audioVolume: number;
   onAudioVolumeChange: (value: number) => void;
   preferences: Preferences;
   onPreferenceChange: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
+  onCheckForUpdates: () => void;
+  isUpdateChecking: boolean;
+  updateStatus: UpdateStatus;
 };
 
 const SettingsToggle: FC<{
@@ -29,9 +35,32 @@ const SettingsToggle: FC<{
   </button>
 );
 
-const SettingsPage: FC<SettingsPageProps> = ({ audioVolume, onAudioVolumeChange, preferences, onPreferenceChange }) => {
+const SettingsPage: FC<SettingsPageProps> = ({
+  audioVolume,
+  onAudioVolumeChange,
+  preferences,
+  onPreferenceChange,
+  onCheckForUpdates,
+  isUpdateChecking,
+  updateStatus,
+}) => {
   const musicPercentageLabel = `${Math.round(audioVolume * 100)}%`;
   const effectsPercentageLabel = `${Math.round((preferences.effectsVolume ?? 1) * 100)}%`;
+  const updateButtonLabel = isUpdateChecking
+    ? 'Checking...'
+    : updateStatus === 'ready'
+      ? 'Apply Update'
+      : 'Check for Updates';
+  const versionBannerText = updateStatus === 'ready'
+    ? 'Update downloaded! Refresh to apply it.'
+    : `Current version: v${GAME_VERSION}`;
+  const statusTextMap: Record<UpdateStatus, string> = {
+    idle: 'You are on the latest version. Updates install automatically.',
+    checking: 'Checking for new builds...',
+    ready: 'Update downloaded! Apply it to get the latest fixes.',
+  upToDate: 'All caught up.',
+    error: 'Could not reach the update server. Try again in a bit.',
+  };
 
   return (
     <div className="flex flex-col gap-6 text-xs text-pixel-console-text">
@@ -117,6 +146,24 @@ const SettingsPage: FC<SettingsPageProps> = ({ audioVolume, onAudioVolumeChange,
           value={preferences.disableConfetti}
           onChange={(value) => onPreferenceChange('disableConfetti', value)}
         />
+      </section>
+
+      <section className="season-panel-solid rounded-xl border border-pixel-border/60 bg-pixel-panel/70 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-pixel-accent">Updates</p>
+          <span className="text-[10px] text-pixel-text/70">{versionBannerText}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onCheckForUpdates}
+          disabled={isUpdateChecking}
+          className="season-button w-full rounded-lg border-2 border-pixel-border px-3 py-2 text-xs font-bold uppercase shadow-pixel disabled:opacity-60"
+        >
+          {updateButtonLabel}
+        </button>
+        <p className="text-[10px] leading-relaxed text-pixel-text/70">
+          {statusTextMap[updateStatus]}
+        </p>
       </section>
     </div>
   );

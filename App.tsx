@@ -12,6 +12,10 @@ import SettingsPage from './components/SettingsPage';
 import { SeedIcon } from './components/icons';
 import ConfettiLayer, { ConfettiBurst } from './components/ConfettiLayer';
 import SeasonalParticles from './components/SeasonalParticles';
+import { registerSW } from 'virtual:pwa-register';
+
+type UpdateStatus = 'idle' | 'checking' | 'ready' | 'upToDate' | 'error';
+const IS_DEV = import.meta?.env?.DEV ?? false;
 
 const SAVE_KEY = 'pixelGardenSave';
 type AudioTrack = 'title' | 'mainIntro' | 'main' | 'none';
@@ -144,6 +148,12 @@ const App: React.FC = () => {
   const [isSeasonTransitioning, setIsSeasonTransitioning] = useState(false);
   const seasonTransitionTimeoutRef = useRef<number | null>(null);
   const seasonTransitionInitializedRef = useRef(false);
+  const gameStateRef = useRef<GameState>(gameState);
+  const swUpdateRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const hasPendingUpdateRef = useRef(false);
+  const [isUpdateChecking, setIsUpdateChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -158,6 +168,10 @@ const App: React.FC = () => {
   useEffect(() => {
     preferencesRef.current = gameState.preferences;
   }, [gameState.preferences]);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
   useEffect(() => {
     return () => {
@@ -226,6 +240,87 @@ const App: React.FC = () => {
       }
     };
   }, [gameState.currentSeason]);
+
+  const persistLatestSave = useCallback(() => {
+    try {
+      const currentState = gameStateRef.current;
+      if (!currentState) return;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(currentState));
+    } catch (error) {
+      console.error('Failed to persist progress before applying update:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (IS_DEV) {
+      setUpdateStatus('idle');
+      return;
+    }
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    const updateSW = registerSW({
+      immediate: false,
+      onNeedRefresh() {
+        hasPendingUpdateRef.current = true;
+        setUpdateStatus('ready');
+      },
+      onRegisteredSW(_swUrl, registration) {
+        swRegistrationRef.current = registration ?? null;
+      },
+      onRegisterError(error) {
+        console.error('Service worker registration failed:', error);
+        setUpdateStatus('error');
+      },
+    });
+    swUpdateRef.current = updateSW;
+    return () => {
+      swUpdateRef.current = null;
+    };
+  }, []);
+
+  const handleCheckForUpdates = useCallback(async () => {
+    if (IS_DEV) {
+      setUpdateStatus('upToDate');
+      return;
+    }
+    if (isUpdateChecking) return;
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      setUpdateStatus('error');
+      return;
+    }
+    if (hasPendingUpdateRef.current && swUpdateRef.current) {
+      persistLatestSave();
+      try {
+        await swUpdateRef.current(true);
+      } catch (error) {
+        console.error('Update application failed:', error);
+        setUpdateStatus('error');
+        return;
+      }
+      hasPendingUpdateRef.current = false;
+      setUpdateStatus('upToDate');
+      return;
+    }
+    setIsUpdateChecking(true);
+    setUpdateStatus('checking');
+    persistLatestSave();
+    try {
+      if (swRegistrationRef.current) {
+        await swRegistrationRef.current.update();
+      }
+      if (swUpdateRef.current) {
+        await swUpdateRef.current(true);
+        hasPendingUpdateRef.current = false;
+        setUpdateStatus('upToDate');
+      } else {
+        setUpdateStatus('upToDate');
+      }
+    } catch (error) {
+      console.error('Update check failed:', error);
+      setUpdateStatus('error');
+    } finally {
+      setIsUpdateChecking(false);
+    }
+  }, [isUpdateChecking, persistLatestSave]);
 
   const markAwaitingGesture = useCallback(() => {
     if (awaitingUserGestureRef.current) return;
@@ -1215,6 +1310,9 @@ const App: React.FC = () => {
                 onAudioVolumeChange={handleAudioVolumeChange}
                 preferences={gameState.preferences}
                 onPreferenceChange={handlePreferenceChange}
+                onCheckForUpdates={handleCheckForUpdates}
+                isUpdateChecking={isUpdateChecking}
+                updateStatus={updateStatus}
               />
             </div>
             <div className="season-panel-solid sticky bottom-0 border-t border-pixel-border bg-pixel-panel/70 p-4 backdrop-blur-sm">

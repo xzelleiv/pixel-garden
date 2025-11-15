@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GameState, Resources, UpgradeDefinition, MilestoneReward } from '../types';
 import { SeedIcon } from './icons';
-import { UPGRADES, getUpgradeCost, getUpgradeEffect, formatNumber, SEASON_MULTIPLIERS, getUpgradeMilestoneRequirement } from '../constants';
+import { UPGRADES, getUpgradeCost, getUpgradeEffect, formatNumber, SEASON_MULTIPLIERS, getUpgradeMilestoneRequirement, GAME_VERSION } from '../constants';
 
 type Tab = 'Actions' | 'Upgrades' | 'Stats';
 
@@ -706,7 +706,7 @@ const ControlPanel: React.FC<{
                 <div>Developer: Pasao</div>
                 <div>Co-Developer: Scoggins</div>
                 <div>Assets: Cuaresma, Mas</div>
-                <div>Version: 1.5.3</div>
+                <div>Version: {GAME_VERSION}</div>
               </div>
             </div>
           )}
