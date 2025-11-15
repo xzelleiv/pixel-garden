@@ -706,7 +706,7 @@ const ControlPanel: React.FC<{
                 <div>Developer: Pasao</div>
                 <div>Co-Developer: Scoggins</div>
                 <div>Assets: Cuaresma, Mas</div>
-                <div>Version: 1.5.2</div>
+                <div>Version: 1.5.3</div>
               </div>
             </div>
           )}
