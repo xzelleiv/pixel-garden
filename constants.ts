@@ -68,7 +68,7 @@ export const SEASON_TIPS: Record<Season, string> = {
     spring: 'Spring is the rarest event with a 5x multiplier :p',
     summer: 'Summer is steady. Use the downtime to save seeds and prep upgrades.',
     autumn: 'Autumn rewards planning with a 3x bonus—clear withered trees early.',
-    winter: 'Winter slows production. Lean on manual gathering and compost to push through.',
+    winter: 'Winter slows production. Lean on manual gathering and compost.',
 };
 
 export const EVENTS: EventDefinition[] = [
