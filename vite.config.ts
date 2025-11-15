@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
             react(),
             VitePWA({
                 registerType: 'autoUpdate',
-                includeAssets: ['tree.png', 'withered_tree.png', 'audio/mainbg.mp3', 'audio/titlescreen.mp3'],
+                includeAssets: ['tree.png', 'withered_tree.png', 'audio/mainbg.mp3', 'audio/titlescreen.mp3', 'audio/weatherchange.mp3', 'audio/countdown.mp3'],
                 manifest: {
                     name: 'Pixel Garden',
                     short_name: 'PixelGarden',

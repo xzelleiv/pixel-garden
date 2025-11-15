@@ -31,14 +31,15 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ setGameState, addLog }) => {
     };
     
     const handleAddSeeds = () => {
+        const bonus = 1_000_000_000;
         setGameState(prev => ({
             ...prev,
             resources: {
                 ...prev.resources,
-                seeds: (prev.resources.seeds || 0) + 10000
+                seeds: (prev.resources.seeds || 0) + bonus
             }
         }));
-        addLog("DEBUG: Added 10000 seeds.");
+        addLog(`DEBUG: Added ${bonus.toLocaleString()} seeds.`);
     };
     
     const handleFillPlot = () => {
@@ -94,7 +95,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ setGameState, addLog }) => {
             <div className="p-2 max-h-64 overflow-y-auto">
                 <div className="space-y-1">
                     <p className="text-xs text-pixel-text/70 border-b border-pixel-border pb-1 mb-1">Cheats</p>
-                    <DebugButton onClick={handleAddSeeds}>+1000 Seeds</DebugButton>
+                    <DebugButton onClick={handleAddSeeds}>+1B Seeds</DebugButton>
                     <DebugButton onClick={handleFillPlot}>Fill Plot w/ Trees</DebugButton>
                     <DebugButton onClick={handleWitherAll}>Wither All Trees</DebugButton>
                 </div>

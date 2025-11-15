@@ -371,7 +371,7 @@ export const UPGRADES: Upgrades = {
         description: (level) => `Add ${2} new tiles to your plot.`,
         category: 'Expansion',
         baseCost: 2000,
-        costExponent: 2.6,
+        costExponent: 2.9,
         baseEffect: 2,
         effectFormula: (level, base) => base, // Always adds a fixed number of tiles
     },
@@ -392,7 +392,7 @@ export const UPGRADES: Upgrades = {
         description: (level) => `Extends tree lifespan by ${15 * (level + 1)} seeds.`,
         category: 'Expansion',
         baseCost: 4800,
-        costExponent: 2.7,
+        costExponent: 2.8,
         baseEffect: 15,
         effectFormula: (level, base) => level * base,
         requiresMilestone: 1000,

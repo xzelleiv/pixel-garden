@@ -132,6 +132,8 @@ const App: React.FC = () => {
   const milestoneAudioRef = useRef<HTMLAudioElement | null>(null);
   const clickAudioRef = useRef<HTMLAudioElement | null>(null);
   const goldDiamondAudioRef = useRef<HTMLAudioElement | null>(null);
+  const weatherChangeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const countdownAudioRef = useRef<HTMLAudioElement | null>(null);
   const [currentTrack, setCurrentTrack] = useState<AudioTrack>('title');
   const [awaitingUserGesture, setAwaitingUserGesture] = useState(false);
   const awaitingUserGestureRef = useRef(false);
@@ -144,10 +146,14 @@ const App: React.FC = () => {
   const milestoneAudioPrimedRef = useRef(false);
   const clickAudioPrimedRef = useRef(false);
   const goldDiamondAudioPrimedRef = useRef(false);
+  const weatherChangeAudioPrimedRef = useRef(false);
+  const countdownAudioPrimedRef = useRef(false);
   const rareTreeCountsRef = useRef({ golden: 0, diamond: 0, initialized: false });
   const [isSeasonTransitioning, setIsSeasonTransitioning] = useState(false);
   const seasonTransitionTimeoutRef = useRef<number | null>(null);
   const seasonTransitionInitializedRef = useRef(false);
+  const previousSeasonRef = useRef<GameState['currentSeason']>(gameState.currentSeason);
+  const seasonCountdownPlayedRef = useRef(false);
   const gameStateRef = useRef<GameState>(gameState);
   const swUpdateRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
@@ -240,6 +246,7 @@ const App: React.FC = () => {
       }
     };
   }, [gameState.currentSeason]);
+
 
   const persistLatestSave = useCallback(() => {
     try {
@@ -385,6 +392,14 @@ const App: React.FC = () => {
     primeAudio(goldDiamondAudioRef, goldDiamondAudioPrimedRef);
   }, [primeAudio]);
 
+  const primeWeatherChangeAudio = useCallback(() => {
+    primeAudio(weatherChangeAudioRef, weatherChangeAudioPrimedRef);
+  }, [primeAudio]);
+
+  const primeCountdownAudio = useCallback(() => {
+    primeAudio(countdownAudioRef, countdownAudioPrimedRef);
+  }, [primeAudio]);
+
   const handleUserGesture = useCallback(
     (trackOverride?: AudioTrack) => {
       clearAwaitsGesture();
@@ -392,6 +407,8 @@ const App: React.FC = () => {
       primeMilestoneAudio();
       primeClickAudio();
       primeGoldDiamondAudio();
+      primeWeatherChangeAudio();
+      primeCountdownAudio();
       const targetTrack = trackOverride ?? currentTrack;
       if (targetTrack === 'title') {
         attemptPlayback(titleAudioRef.current);
@@ -401,7 +418,7 @@ const App: React.FC = () => {
         attemptPlayback(mainAudioRef.current);
       }
     },
-    [attemptPlayback, clearAwaitsGesture, currentTrack, primeClickAudio, primeGoldDiamondAudio, primeMilestoneAudio, primeWitherAudio]
+    [attemptPlayback, clearAwaitsGesture, currentTrack, primeClickAudio, primeCountdownAudio, primeGoldDiamondAudio, primeMilestoneAudio, primeWeatherChangeAudio, primeWitherAudio]
   );
 
   const handleAudioVolumeChange = useCallback((value: number) => {
@@ -449,6 +466,14 @@ const App: React.FC = () => {
     const rareAudio = goldDiamondAudioRef.current;
     if (rareAudio) {
       rareAudio.volume = effectsVolume;
+    }
+    const weatherAudio = weatherChangeAudioRef.current;
+    if (weatherAudio) {
+      weatherAudio.volume = effectsVolume;
+    }
+    const countdownAudio = countdownAudioRef.current;
+    if (countdownAudio) {
+      countdownAudio.volume = effectsVolume;
     }
   }, [audioVolume, effectsVolume]);
 
@@ -631,6 +656,71 @@ const App: React.FC = () => {
       console.error('Failed to play rare tree audio', error);
     }
   }, [effectsVolume, markAwaitingGesture, primeGoldDiamondAudio]);
+
+  const playWeatherChangeSound = useCallback(() => {
+    if (effectsVolume <= 0) return;
+    if (!weatherChangeAudioPrimedRef.current) {
+      primeWeatherChangeAudio();
+    }
+    const audio = weatherChangeAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(error => {
+          console.error('Weather change audio failed to play', error);
+          markAwaitingGesture();
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play weather change audio', error);
+    }
+  }, [effectsVolume, markAwaitingGesture, primeWeatherChangeAudio]);
+
+  const playSeasonCountdownSound = useCallback(() => {
+    if (effectsVolume <= 0) return;
+    if (!countdownAudioPrimedRef.current) {
+      primeCountdownAudio();
+    }
+    const audio = countdownAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(error => {
+          console.error('Season countdown audio failed to play', error);
+          markAwaitingGesture();
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play season countdown audio', error);
+    }
+  }, [effectsVolume, markAwaitingGesture, primeCountdownAudio]);
+
+  useEffect(() => {
+    if (previousSeasonRef.current !== gameState.currentSeason) {
+      if (previousSeasonRef.current) {
+        playWeatherChangeSound();
+      }
+      previousSeasonRef.current = gameState.currentSeason;
+      seasonCountdownPlayedRef.current = false;
+    }
+  }, [gameState.currentSeason, playWeatherChangeSound]);
+
+  useEffect(() => {
+    if (gameState.seasonDuration > 4) {
+      seasonCountdownPlayedRef.current = false;
+      return;
+    }
+    if (gameState.seasonDuration > 0 && gameState.seasonDuration <= 4) {
+      if (!seasonCountdownPlayedRef.current) {
+        playSeasonCountdownSound();
+        seasonCountdownPlayedRef.current = true;
+      }
+    }
+  }, [gameState.seasonDuration, playSeasonCountdownSound]);
 
   useEffect(() => {
     const goldenCount = gameState.plot.filter(tile => tile.isGolden).length;
@@ -1349,6 +1439,8 @@ const App: React.FC = () => {
   <audio ref={milestoneAudioRef} src={getAssetUrl('audio/milestone.mp3')} preload="auto" />
   <audio ref={clickAudioRef} src={getAssetUrl('audio/clicksound.mp3')} preload="auto" />
   <audio ref={goldDiamondAudioRef} src={getAssetUrl('audio/golddiamond.mp3')} preload="auto" />
+  <audio ref={weatherChangeAudioRef} src={getAssetUrl('audio/weatherchange.mp3')} preload="auto" />
+  <audio ref={countdownAudioRef} src={getAssetUrl('audio/countdown.mp3')} preload="auto" />
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
       {!hasStarted && <TitleScreen onStart={handleStartGame} />}
     </div>
