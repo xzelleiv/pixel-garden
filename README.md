@@ -21,7 +21,7 @@ The site deploys to GitHub Pages at `https://xzelleiv.github.io/pixel-garden/`.
 
 1. Visit the live site (or your local dev server) in a modern browser.
 2. Wait for the "Install"/"Add to Home Screen" prompt, or open the browser menu and choose **Install App** (Chrome) or **Add to Home Screen** (Safari).
-3. The app installs with a native-like icon (matching the tree sprite) and runs standalone, caching assets, audio, and game code.
+3. The app installs with a native-like icon (matching the tree) and runs standalone, caching assets, audio, and game code.
 4. Progress still saves locally, and the service worker keeps assets fresh the next time you're online.
 
 ## Building for Production

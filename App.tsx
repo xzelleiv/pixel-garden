@@ -34,6 +34,7 @@ const BASE_PLANTING_INCREMENT = 5;
 const MIN_PLANTING_INCREMENT = 1;
 const CONFETTI_COLORS = ['#ff6b6b', '#ffd93d', '#6c5ce7', '#00cec9', '#f8a5c2', '#ff9f43'];
 const LOG_THROTTLE_MS = 7000;
+const AUTO_ACTION_LOG_INTERVAL_MS = 45000;
 
 const calculatePlantingCost = (treeCount: number, baseCost: number, seedVaultLevel: number): number => {
   const discountPerTree = seedVaultLevel > 0 ? getUpgradeEffect('seedVault', seedVaultLevel) : 0;
@@ -140,6 +141,9 @@ const App: React.FC = () => {
   const clickAudioPrimedRef = useRef(false);
   const goldDiamondAudioPrimedRef = useRef(false);
   const rareTreeCountsRef = useRef({ golden: 0, diamond: 0, initialized: false });
+  const [isSeasonTransitioning, setIsSeasonTransitioning] = useState(false);
+  const seasonTransitionTimeoutRef = useRef<number | null>(null);
+  const seasonTransitionInitializedRef = useRef(false);
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -166,12 +170,12 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.ctrlKey && e.key === 'd') {
-            e.preventDefault();
-            setIsDebugVisible(prev => !prev);
-        }
-    };
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.ctrlKey && e.altKey && e.key === 'Home') {
+      e.preventDefault();
+      setIsDebugVisible(prev => !prev);
+    }
+  };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
@@ -197,6 +201,29 @@ const App: React.FC = () => {
     document.body.dataset.season = gameState.currentSeason;
     return () => {
       document.body.dataset.season = 'summer';
+    };
+  }, [gameState.currentSeason]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!seasonTransitionInitializedRef.current) {
+      seasonTransitionInitializedRef.current = true;
+      return;
+    }
+    setIsSeasonTransitioning(true);
+    if (seasonTransitionTimeoutRef.current) {
+      window.clearTimeout(seasonTransitionTimeoutRef.current);
+    }
+    seasonTransitionTimeoutRef.current = window.setTimeout(() => {
+      setIsSeasonTransitioning(false);
+      seasonTransitionTimeoutRef.current = null;
+    }, 900);
+
+    return () => {
+      if (seasonTransitionTimeoutRef.current) {
+        window.clearTimeout(seasonTransitionTimeoutRef.current);
+        seasonTransitionTimeoutRef.current = null;
+      }
     };
   }, [gameState.currentSeason]);
 
@@ -645,7 +672,7 @@ const App: React.FC = () => {
             addLog("Fertilizer worked! A golden sapling grew, producing extra seeds.");
           }
                     
-          logWithThrottle('autoPlanter', 'Auto Planter planted a new tree.');
+          logWithThrottle('autoPlanter', 'Auto Planter planted a new tree.', AUTO_ACTION_LOG_INTERVAL_MS);
         }
         mutableState.autoPlanterCooldown = getUpgradeEffect('autoPlanter', autoPlanterLevel);
       }
@@ -672,7 +699,7 @@ const App: React.FC = () => {
                   if (wasDiamond) currentCompostBonus *= 10;
                   else if (wasGolden) currentCompostBonus *= 5;
                   mutableState.resources.seeds += currentCompostBonus;
-          logWithThrottle('autoShovel', 'Auto Shovel cleared a withered tree.');
+          logWithThrottle('autoShovel', 'Auto Shovel cleared a withered tree.', AUTO_ACTION_LOG_INTERVAL_MS);
               }
               mutableState.autoShovelCooldown = getUpgradeEffect('autoShovel', autoShovelLevel);
            }
@@ -1043,7 +1070,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen h-screen w-full relative overflow-hidden" style={{ background: 'var(--season-bg-secondary, #3c2f2f)' }}>
-      <div className="absolute inset-0 -z-20" style={{ background: 'var(--season-bg, #3c2f2f)', transition: 'background 0.8s ease' }} />
+      <div
+        className={`absolute inset-0 -z-20 transition-all duration-700 ease-out ${isSeasonTransitioning ? 'opacity-0 scale-105' : 'opacity-100 scale-100'}`}
+        style={{ background: 'var(--season-bg, #3c2f2f)' }}
+        aria-hidden="true"
+      />
+      <div
+        className={`absolute inset-0 -z-10 pointer-events-none transition-opacity duration-700 ease-out mix-blend-screen bg-gradient-to-br from-white/20 via-transparent to-transparent ${isSeasonTransitioning ? 'opacity-40' : 'opacity-0'}`}
+        aria-hidden="true"
+      />
       {!gameState.preferences.disableParticles && (
         <SeasonalParticles season={gameState.currentSeason} reducedMotion={gameState.preferences.reducedMotion} />
       )}

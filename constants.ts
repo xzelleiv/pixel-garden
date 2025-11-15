@@ -151,7 +151,7 @@ export const EVENTS: EventDefinition[] = [
     {
         id: 'changeToSummer',
         description: "Summer has arrived.",
-        weight: 0.5,
+        weight: 0.65,
         canTrigger: (gs) => gs.currentSeason !== 'summer' && gs.seasonDuration <= 0,
         apply: (gs) => {
             gs.currentSeason = 'summer';
@@ -162,7 +162,7 @@ export const EVENTS: EventDefinition[] = [
     {
         id: 'changeToAutumn',
         description: "Autumn has arrived.",
-        weight: 0.6,
+        weight: 0.75,
         canTrigger: (gs) => gs.currentSeason !== 'autumn' && gs.seasonDuration <= 0,
         apply: (gs) => {
             gs.currentSeason = 'autumn';
@@ -173,7 +173,7 @@ export const EVENTS: EventDefinition[] = [
     {
         id: 'changeToWinter',
         description: "Winter has come.",
-        weight: 0.3,
+        weight: 0.45,
         canTrigger: (gs) => gs.currentSeason !== 'winter' && gs.seasonDuration <= 0,
         apply: (gs) => {
             gs.currentSeason = 'winter';
