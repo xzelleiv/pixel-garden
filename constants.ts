@@ -12,7 +12,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
     effectsVolume: 1,
 };
 
-export const GAME_VERSION = '1.5.5';
+export const GAME_VERSION = '1.5.6';
 
 export const INITIAL_PLOT_SIZE = 16;
 export const TREE_LIFESPAN_SEEDS = 60;
