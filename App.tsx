@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { GameState, PlotTile, Preferences } from './types';
-import { INITIAL_GAME_STATE, UPGRADES, PLANTING_MILESTONES, getUpgradeCost, getUpgradeEffect, EVENTS, TREE_LIFESPAN_SEEDS, SEASON_MULTIPLIERS, SEASON_DURATION, formatNumber, SEASON_TIPS, MILESTONE_REWARDS, getUpgradeMilestoneRequirement } from './constants';
+import { INITIAL_GAME_STATE, UPGRADES, PLANTING_MILESTONES, getUpgradeCost, getUpgradeEffect, EVENTS, TREE_LIFESPAN_SEEDS, SEASON_MULTIPLIERS, SEASON_DURATION, formatNumber, SEASON_TIPS, MILESTONE_REWARDS, getUpgradeMilestoneRequirement, GOLDEN_TREE_DURATION_MS, DIAMOND_TREE_DURATION_MS } from './constants';
 import { useGameLoop } from './hooks/useGameLoop';
 import Plot from './components/Plot';
 import ControlPanel from './components/ControlPanel';
@@ -11,9 +11,10 @@ import TitleScreen from './components/TitleScreen';
 import SettingsPage from './components/SettingsPage';
 import { SeedIcon } from './components/icons';
 import ConfettiLayer, { ConfettiBurst } from './components/ConfettiLayer';
+import SeasonalParticles from './components/SeasonalParticles';
 
 const SAVE_KEY = 'pixelGardenSave';
-type AudioTrack = 'title' | 'main' | 'none';
+type AudioTrack = 'title' | 'mainIntro' | 'main' | 'none';
 
 type ViteImportMetaWithBaseUrl = ImportMeta & {
   env?: {
@@ -38,6 +39,26 @@ const calculatePlantingCost = (treeCount: number, baseCost: number, seedVaultLev
   const discountPerTree = seedVaultLevel > 0 ? getUpgradeEffect('seedVault', seedVaultLevel) : 0;
   const incrementalCost = Math.max(MIN_PLANTING_INCREMENT, BASE_PLANTING_INCREMENT - discountPerTree);
   return baseCost + (treeCount * incrementalCost);
+};
+
+const scheduleRareExpiry = (tile: PlotTile) => {
+  if (tile.isDiamond) {
+    tile.rareExpiresAt = Date.now() + DIAMOND_TREE_DURATION_MS;
+  } else if (tile.isGolden) {
+    tile.rareExpiresAt = Date.now() + GOLDEN_TREE_DURATION_MS;
+  } else {
+    tile.rareExpiresAt = undefined;
+  }
+};
+
+const ensureRareExpiry = (tile: PlotTile) => {
+  if ((tile.isDiamond || tile.isGolden) && !tile.rareExpiresAt) {
+    scheduleRareExpiry(tile);
+  }
+};
+
+const clearRareExpiry = (tile: PlotTile) => {
+  tile.rareExpiresAt = undefined;
 };
 
 const App: React.FC = () => {
@@ -100,14 +121,25 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileMilestoneOpen, setIsMobileMilestoneOpen] = useState(false);
   const titleAudioRef = useRef<HTMLAudioElement | null>(null);
+  const mainIntroAudioRef = useRef<HTMLAudioElement | null>(null);
   const mainAudioRef = useRef<HTMLAudioElement | null>(null);
+  const witherAudioRef = useRef<HTMLAudioElement | null>(null);
+  const milestoneAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+  const goldDiamondAudioRef = useRef<HTMLAudioElement | null>(null);
   const [currentTrack, setCurrentTrack] = useState<AudioTrack>('title');
   const [awaitingUserGesture, setAwaitingUserGesture] = useState(false);
   const awaitingUserGestureRef = useRef(false);
   const [audioVolume, setAudioVolume] = useState(0.65);
+  const effectsVolume = gameState.preferences.effectsVolume ?? 1;
   const preferencesRef = useRef<Preferences>(gameState.preferences);
   const confettiTimeoutsRef = useRef<number[]>([]);
   const throttledLogsRef = useRef<Record<string, number>>({});
+  const witherAudioPrimedRef = useRef(false);
+  const milestoneAudioPrimedRef = useRef(false);
+  const clickAudioPrimedRef = useRef(false);
+  const goldDiamondAudioPrimedRef = useRef(false);
+  const rareTreeCountsRef = useRef({ golden: 0, diamond: 0, initialized: false });
 
   // Save game state to localStorage whenever it changes
   useEffect(() => {
@@ -160,6 +192,14 @@ const App: React.FC = () => {
     setIsMobileMilestoneOpen(false);
   }, [gameState.totalTreesPlanted]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.dataset.season = gameState.currentSeason;
+    return () => {
+      document.body.dataset.season = 'summer';
+    };
+  }, [gameState.currentSeason]);
+
   const markAwaitingGesture = useCallback(() => {
     if (awaitingUserGestureRef.current) return;
     awaitingUserGestureRef.current = true;
@@ -182,17 +222,64 @@ const App: React.FC = () => {
     }
   }, [markAwaitingGesture]);
 
+  const primeAudio = useCallback((audioRef: React.MutableRefObject<HTMLAudioElement | null>, primedRef: React.MutableRefObject<boolean>) => {
+    if (primedRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const originalMuted = audio.muted;
+    audio.muted = true;
+    audio.currentTime = 0;
+    const playPromise = audio.play();
+    const finalize = () => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = originalMuted;
+      primedRef.current = true;
+    };
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise
+        .then(finalize)
+        .catch(() => {
+          audio.muted = originalMuted;
+        });
+    } else {
+      finalize();
+    }
+  }, []);
+
+  const primeWitherAudio = useCallback(() => {
+    primeAudio(witherAudioRef, witherAudioPrimedRef);
+  }, [primeAudio]);
+
+  const primeMilestoneAudio = useCallback(() => {
+    primeAudio(milestoneAudioRef, milestoneAudioPrimedRef);
+  }, [primeAudio]);
+
+  const primeClickAudio = useCallback(() => {
+    primeAudio(clickAudioRef, clickAudioPrimedRef);
+  }, [primeAudio]);
+
+  const primeGoldDiamondAudio = useCallback(() => {
+    primeAudio(goldDiamondAudioRef, goldDiamondAudioPrimedRef);
+  }, [primeAudio]);
+
   const handleUserGesture = useCallback(
     (trackOverride?: AudioTrack) => {
       clearAwaitsGesture();
+      primeWitherAudio();
+      primeMilestoneAudio();
+      primeClickAudio();
+      primeGoldDiamondAudio();
       const targetTrack = trackOverride ?? currentTrack;
       if (targetTrack === 'title') {
         attemptPlayback(titleAudioRef.current);
+      } else if (targetTrack === 'mainIntro') {
+        attemptPlayback(mainIntroAudioRef.current);
       } else if (targetTrack === 'main') {
         attemptPlayback(mainAudioRef.current);
       }
     },
-    [attemptPlayback, clearAwaitsGesture, currentTrack]
+    [attemptPlayback, clearAwaitsGesture, currentTrack, primeClickAudio, primeGoldDiamondAudio, primeMilestoneAudio, primeWitherAudio]
   );
 
   const handleAudioVolumeChange = useCallback((value: number) => {
@@ -215,28 +302,59 @@ const App: React.FC = () => {
       titleAudio.loop = true;
       titleAudio.volume = audioVolume;
     }
+    const introAudio = mainIntroAudioRef.current;
+    if (introAudio) {
+      introAudio.loop = false;
+      introAudio.volume = audioVolume;
+    }
     const mainAudio = mainAudioRef.current;
     if (mainAudio) {
-      mainAudio.loop = true;
+      mainAudio.loop = false;
       mainAudio.volume = audioVolume;
     }
-  }, [audioVolume]);
+    const witherAudio = witherAudioRef.current;
+    if (witherAudio) {
+      witherAudio.volume = effectsVolume;
+    }
+    const milestoneAudio = milestoneAudioRef.current;
+    if (milestoneAudio) {
+      milestoneAudio.volume = effectsVolume;
+    }
+    const clickAudio = clickAudioRef.current;
+    if (clickAudio) {
+      clickAudio.volume = effectsVolume;
+    }
+    const rareAudio = goldDiamondAudioRef.current;
+    if (rareAudio) {
+      rareAudio.volume = effectsVolume;
+    }
+  }, [audioVolume, effectsVolume]);
 
   useEffect(() => {
     if (currentTrack === 'title') {
+      mainIntroAudioRef.current?.pause();
       if (mainAudioRef.current) {
         mainAudioRef.current.pause();
         mainAudioRef.current.currentTime = 0;
       }
       attemptPlayback(titleAudioRef.current);
+    } else if (currentTrack === 'mainIntro') {
+      titleAudioRef.current?.pause();
+      if (mainAudioRef.current) {
+        mainAudioRef.current.pause();
+        mainAudioRef.current.currentTime = 0;
+      }
+      attemptPlayback(mainIntroAudioRef.current);
     } else if (currentTrack === 'main') {
-      if (titleAudioRef.current) {
-        titleAudioRef.current.pause();
-        titleAudioRef.current.currentTime = 0;
+      titleAudioRef.current?.pause();
+      if (mainIntroAudioRef.current) {
+        mainIntroAudioRef.current.pause();
+        mainIntroAudioRef.current.currentTime = 0;
       }
       attemptPlayback(mainAudioRef.current);
     } else {
       titleAudioRef.current?.pause();
+      mainIntroAudioRef.current?.pause();
       mainAudioRef.current?.pause();
     }
   }, [currentTrack, attemptPlayback]);
@@ -251,6 +369,30 @@ const App: React.FC = () => {
       window.removeEventListener('keydown', onUserGesture);
     };
   }, [awaitingUserGesture, handleUserGesture]);
+
+  useEffect(() => {
+    const introAudio = mainIntroAudioRef.current;
+    if (!introAudio) return;
+    const handleEnded = () => {
+      setCurrentTrack(prev => (prev === 'mainIntro' ? 'main' : prev));
+    };
+    introAudio.addEventListener('ended', handleEnded);
+    return () => {
+      introAudio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  useEffect(() => {
+    const mainAudio = mainAudioRef.current;
+    if (!mainAudio) return;
+    const handleEnded = () => {
+      setCurrentTrack(prev => (prev === 'main' ? 'mainIntro' : prev));
+    };
+    mainAudio.addEventListener('ended', handleEnded);
+    return () => {
+      mainAudio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
 
   const addLog = useCallback((message: string) => {
     setLogs(prev => {
@@ -283,6 +425,112 @@ const App: React.FC = () => {
   const seedGenerationRate = useMemo(() => getUpgradeEffect('betterSoil', gameState.upgrades.betterSoil.level), [gameState.upgrades.betterSoil.level]);
   const compostBonus = useMemo(() => getUpgradeEffect('shovel', gameState.upgrades.shovel.level) + getUpgradeEffect('composter', gameState.upgrades.composter.level), [gameState.upgrades.shovel.level, gameState.upgrades.composter.level]);
   const typingSpeed = gameState.preferences.reducedMotion ? 0 : 20;
+
+  const playWitherClearSound = useCallback(() => {
+    if (effectsVolume <= 0) return;
+    if (!witherAudioPrimedRef.current) {
+      primeWitherAudio();
+    }
+    const audio = witherAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(error => {
+          console.error('Wither clear audio failed to play', error);
+          markAwaitingGesture();
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play wither clear audio', error);
+    }
+  }, [effectsVolume, markAwaitingGesture, primeWitherAudio]);
+
+  const playMilestoneSound = useCallback(() => {
+    if (effectsVolume <= 0) return;
+    if (!milestoneAudioPrimedRef.current) {
+      primeMilestoneAudio();
+    }
+    const audio = milestoneAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(error => {
+          console.error('Milestone audio failed to play', error);
+          markAwaitingGesture();
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play milestone audio', error);
+    }
+  }, [effectsVolume, markAwaitingGesture, primeMilestoneAudio]);
+
+  const playClickSound = useCallback(() => {
+    if (effectsVolume <= 0) return;
+    if (!clickAudioPrimedRef.current) {
+      primeClickAudio();
+    }
+    const audio = clickAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(error => {
+          console.error('Click audio failed to play', error);
+          markAwaitingGesture();
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play click audio', error);
+    }
+  }, [effectsVolume, markAwaitingGesture, primeClickAudio]);
+
+  const playGoldDiamondSound = useCallback(() => {
+    if (effectsVolume <= 0) return;
+    if (!goldDiamondAudioPrimedRef.current) {
+      primeGoldDiamondAudio();
+    }
+    const audio = goldDiamondAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch(error => {
+          console.error('Rare tree audio failed to play', error);
+          markAwaitingGesture();
+        });
+      }
+    } catch (error) {
+      console.error('Failed to play rare tree audio', error);
+    }
+  }, [effectsVolume, markAwaitingGesture, primeGoldDiamondAudio]);
+
+  useEffect(() => {
+    const goldenCount = gameState.plot.filter(tile => tile.isGolden).length;
+    const diamondCount = gameState.plot.filter(tile => tile.isDiamond).length;
+    if (!rareTreeCountsRef.current.initialized) {
+      rareTreeCountsRef.current = {
+        golden: goldenCount,
+        diamond: diamondCount,
+        initialized: true,
+      };
+      return;
+    }
+    const previous = rareTreeCountsRef.current;
+    if (goldenCount > previous.golden || diamondCount > previous.diamond) {
+      playGoldDiamondSound();
+    }
+    rareTreeCountsRef.current = {
+      golden: goldenCount,
+      diamond: diamondCount,
+      initialized: true,
+    };
+  }, [gameState.plot, playGoldDiamondSound]);
 
   const createConfettiBurst = useCallback((intensity: number): ConfettiBurst => {
     const particleCount = Math.min(80, 12 + Math.floor(intensity * 6));
@@ -382,11 +630,18 @@ const App: React.FC = () => {
         if (emptyTile && treeCount < plotCapacity && mutableState.resources.seeds >= currentPlantingCost) {
           mutableState.resources.seeds -= currentPlantingCost;
           emptyTile.hasTree = true;
+          emptyTile.isWithered = false;
+          emptyTile.seedsGenerated = 0;
+          emptyTile.isGolden = false;
+          emptyTile.isDiamond = false;
+          clearRareExpiry(emptyTile);
 
           // Fertilizer logic
           const fertilizerChance = getUpgradeEffect('fertilizer', mutableState.upgrades.fertilizer.level);
           if (Math.random() * 100 < fertilizerChance) {
             emptyTile.isGolden = true;
+            emptyTile.isDiamond = false;
+            scheduleRareExpiry(emptyTile);
             addLog("Fertilizer worked! A golden sapling grew, producing extra seeds.");
           }
                     
@@ -411,7 +666,8 @@ const App: React.FC = () => {
                   witheredTile.seedsGenerated = 0;
                   witheredTile.isGolden = false;
                   witheredTile.isDiamond = false;
-                  
+                  clearRareExpiry(witheredTile);
+                  playWitherClearSound();
                   let currentCompostBonus = getUpgradeEffect('shovel', mutableState.upgrades.shovel.level) + getUpgradeEffect('composter', mutableState.upgrades.composter.level);
                   if (wasDiamond) currentCompostBonus *= 10;
                   else if (wasGolden) currentCompostBonus *= 5;
@@ -434,6 +690,11 @@ const App: React.FC = () => {
             const lucky = Math.random() < 0.18;
             emptyTile.isGolden = lucky;
             emptyTile.isDiamond = false;
+            if (lucky) {
+              scheduleRareExpiry(emptyTile);
+            } else {
+              clearRareExpiry(emptyTile);
+            }
             mutableState.totalTreesPlanted += 1;
             addLog(lucky ? 'Gnome interns planted a shiny tree for free.' : 'Gnome interns planted a free tree.');
           } else {
@@ -450,8 +711,22 @@ const App: React.FC = () => {
       const currentSeedGenRate = getUpgradeEffect('betterSoil', mutableState.upgrades.betterSoil.level);
       const seasonMultiplier = SEASON_MULTIPLIERS[mutableState.currentSeason];
 
+      const now = Date.now();
       mutableState.plot.forEach((tile: PlotTile) => {
         if (tile.hasTree && !tile.isWithered) {
+          if (tile.isGolden || tile.isDiamond) {
+            ensureRareExpiry(tile);
+          }
+          const rareExpiry = tile.rareExpiresAt ?? null;
+          const hasRareStatus = tile.isGolden || tile.isDiamond;
+
+          if (hasRareStatus && rareExpiry && now >= rareExpiry) {
+            tile.isWithered = true;
+            clearRareExpiry(tile);
+            witheredCountThisTick++;
+            return;
+          }
+
           let generationMultiplier = 1;
           if (tile.isDiamond) generationMultiplier = 5;
           else if (tile.isGolden) generationMultiplier = 2;
@@ -462,13 +737,16 @@ const App: React.FC = () => {
           tile.seedsGenerated += seedsThisTick;
           if (tile.seedsGenerated >= mutableState.treeLifespanSeeds) {
             const savedBySprinklers = sprinklerChance > 0 && Math.random() * 100 < sprinklerChance;
-            if (savedBySprinklers) {
+            if (hasRareStatus && rareExpiry && now < rareExpiry) {
+              tile.seedsGenerated = Math.floor(mutableState.treeLifespanSeeds * 0.5);
+            } else if (savedBySprinklers) {
               tile.seedsGenerated = Math.floor(mutableState.treeLifespanSeeds * 0.5);
               if (Math.random() < 0.2) {
                 addLog('Sprinklers saved a tree from withering.');
               }
             } else {
               tile.isWithered = true;
+              clearRareExpiry(tile);
               witheredCountThisTick++;
             }
           }
@@ -498,11 +776,12 @@ const App: React.FC = () => {
       
       return mutableState;
     });
-  }, [addLog]);
+  }, [addLog, playWitherClearSound]);
 
   useGameLoop(gameTick, hasStarted ? 1000 : null);
 
   const handleAction = useCallback((action: string) => {
+    const shouldPlayClick = action !== 'clearWithered';
     let triggeredConfettiLevel: number | null = null;
     setGameState(prev => {
         const newState: GameState = JSON.parse(JSON.stringify(prev));
@@ -534,28 +813,40 @@ const App: React.FC = () => {
                 if (emptyTile && treeCount < plotCapacity && newState.resources.seeds >= currentPlantingCost) {
                     newState.resources.seeds -= currentPlantingCost;
                     emptyTile.hasTree = true;
+          emptyTile.isWithered = false;
+          emptyTile.seedsGenerated = 0;
+          emptyTile.isGolden = false;
+          emptyTile.isDiamond = false;
+          clearRareExpiry(emptyTile);
                     
                     // Fertilizer logic
                     const fertilizerChance = getUpgradeEffect('fertilizer', newState.upgrades.fertilizer.level);
                     if (Math.random() * 100 < fertilizerChance) {
                         emptyTile.isGolden = true;
+            emptyTile.isDiamond = false;
+            scheduleRareExpiry(emptyTile);
                         addLog("Fertilizer worked! A golden sapling grew, producing extra seeds.");
                     }
 
                     newState.totalTreesPlanted += 1;
                     const milestone = PLANTING_MILESTONES.find(m => m === newState.totalTreesPlanted);
                     if (milestone && !newState.loggedMilestones[`planted${milestone}`]) {
+                playMilestoneSound();
                        addLog(milestone === 1 ? "Planted your first tree." : `Planted ${milestone} trees.`);
                        const rewards = MILESTONE_REWARDS[milestone];
                        if (rewards) {
-                         rewards.forEach(reward => {
+                         rewards.forEach((reward, rewardIndex) => {
                            if (reward.type === 'gatherBonus') {
                              if (!newState.milestoneBonuses) {
                                newState.milestoneBonuses = { gatherBonus: 0 };
                              }
                              newState.milestoneBonuses.gatherBonus += reward.amount;
                            }
-                           addLog(reward.message);
+                           logWithThrottle(
+                             `milestone-reward-${milestone}-${rewardIndex}`,
+                             reward.message,
+                             LOG_THROTTLE_MS
+                           );
                          });
                        }
                        newState.loggedMilestones[`planted${milestone}`] = true;
@@ -573,6 +864,8 @@ const App: React.FC = () => {
                     witheredTile.seedsGenerated = 0;
                     witheredTile.isGolden = false;
                     witheredTile.isDiamond = false;
+                    clearRareExpiry(witheredTile);
+                    playWitherClearSound();
 
                     addLog("Cleared a withered tree.");
                     if (newState.upgrades.shovel.level > 0) {
@@ -594,10 +887,13 @@ const App: React.FC = () => {
         newState.peakSeeds = Math.max(newState.peakSeeds || 0, newState.resources.seeds);
         return newState;
     });
+    if (shouldPlayClick) {
+      playClickSound();
+    }
     if (triggeredConfettiLevel !== null && !preferencesRef.current.disableConfetti) {
       triggerConfettiBurst(triggeredConfettiLevel);
     }
-  }, [addLog, triggerConfettiBurst]);
+  }, [addLog, logWithThrottle, playClickSound, playMilestoneSound, triggerConfettiBurst, playWitherClearSound]);
   
   const handleClearHoldStart = useCallback(() => {
     if (gameState.upgrades.shovel.level > 0) return;
@@ -639,6 +935,7 @@ const App: React.FC = () => {
 
   const handleBuyUpgrade = useCallback((upgradeId: string) => {
     if (!canAffordUpgrade(upgradeId)) return;
+    playClickSound();
     
     const upgradeDef = UPGRADES[upgradeId];
     const currentLevel = gameState.upgrades[upgradeId].level;
@@ -661,6 +958,7 @@ const App: React.FC = () => {
                 seedsGenerated: 0,
                 isGolden: false,
                 isDiamond: false,
+        rareExpiresAt: undefined,
             }));
             newState.plot.push(...newTiles);
         }
@@ -673,7 +971,7 @@ const App: React.FC = () => {
         
         return newState;
     });
-  }, [canAffordUpgrade, gameState.upgrades, addLog]);
+  }, [addLog, canAffordUpgrade, gameState.upgrades, playClickSound]);
 
   const handleResetHoldStart = useCallback(() => {
     if (resetTimerRef.current) clearInterval(resetTimerRef.current);
@@ -744,7 +1042,12 @@ const App: React.FC = () => {
   }, [addLog, handleUserGesture]);
 
   return (
-    <div className="h-screen font-press-start text-sm p-1 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
+    <div className="min-h-screen h-screen w-full relative overflow-hidden" style={{ background: 'var(--season-bg-secondary, #3c2f2f)' }}>
+      <div className="absolute inset-0 -z-20" style={{ background: 'var(--season-bg, #3c2f2f)', transition: 'background 0.8s ease' }} />
+      {!gameState.preferences.disableParticles && (
+        <SeasonalParticles season={gameState.currentSeason} reducedMotion={gameState.preferences.reducedMotion} />
+      )}
+  <div className="relative z-10 h-full font-press-start text-sm p-1 sm:p-4 flex flex-col items-center selection:bg-pixel-accent selection:text-pixel-bg">
       <div className="w-full max-w-7xl flex-shrink-0 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
@@ -755,7 +1058,7 @@ const App: React.FC = () => {
             aria-expanded={isSidebarOpen}
             aria-controls="mobile-sidebar"
             aria-label="Toggle menu"
-            className="flex-shrink-0 rounded-md border-2 border-pixel-border bg-pixel-panel p-2 shadow-pixel"
+            className="season-button flex-shrink-0 rounded-md border-2 border-pixel-border p-2 shadow-pixel"
             onClick={toggleSidebar}
           >
             <span className="flex flex-col gap-1">
@@ -769,7 +1072,7 @@ const App: React.FC = () => {
 
       {/* Mobile-only Resource & Milestone Toggle */}
       <div className="w-full max-w-7xl px-2 mb-2 md:hidden">
-        <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel p-1 flex items-center justify-between gap-2">
+        <div className="season-panel-solid bg-pixel-panel border-2 border-pixel-border shadow-pixel p-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <SeedIcon />
             <span className="text-pixel-accent font-bold text-base">{formatNumber(gameState.resources.seeds || 0)}</span>
@@ -778,7 +1081,7 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsMobileMilestoneOpen(prev => !prev)}
-              className="flex items-center justify-center rounded border border-pixel-border bg-pixel-panel/60 px-2 py-1 text-lg leading-none text-pixel-accent shadow-pixel"
+              className="season-button flex items-center justify-center rounded border border-pixel-border px-2 py-1 text-lg leading-none shadow-pixel"
               aria-expanded={isMobileMilestoneOpen}
               aria-label={isMobileMilestoneOpen ? 'Hide milestone details' : 'Show milestone details'}
             >
@@ -787,7 +1090,7 @@ const App: React.FC = () => {
           )}
         </div>
         {nextMilestoneValue && isMobileMilestoneOpen && (
-          <div className="mt-2 rounded-lg border-2 border-pixel-border bg-pixel-panel/80 px-3 py-2 text-[11px] leading-snug text-pixel-text/80">
+          <div className="season-panel-solid mt-2 rounded-lg border-2 border-pixel-border bg-pixel-panel/80 px-3 py-2 text-[11px] leading-snug text-pixel-text/80">
             <p>
               Plant <span className="text-pixel-accent">{Math.max(0, nextMilestoneValue - gameState.totalTreesPlanted)}</span> more tree{Math.max(0, nextMilestoneValue - gameState.totalTreesPlanted) === 1 ? '' : 's'} to unlock:
             </p>
@@ -800,20 +1103,22 @@ const App: React.FC = () => {
         )}
       </div>
       
-      <main className="w-full max-w-7xl flex-grow flex flex-col md:grid md:grid-cols-3 lg:grid-cols-6 gap-6 min-h-0 mt-1 md:mt-0">
-        <div className="hidden lg:block lg:col-span-1 md:h-full">
-            <InfoPanel
-              upgrades={gameState.upgrades}
-            />
+  <main className="w-full max-w-7xl flex-1 h-full flex flex-col md:grid md:grid-cols-3 lg:grid-cols-6 md:[grid-auto-rows:minmax(0,1fr)] md:items-stretch gap-4 md:gap-6 min-h-0 mt-1 md:mt-0">
+        <div className="hidden lg:block lg:col-span-1 h-full min-h-0 overflow-hidden">
+            <div className="h-full">
+              <InfoPanel
+                upgrades={gameState.upgrades}
+              />
+            </div>
         </div>
         
-        <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 md:h-full">
-            <div className="flex-grow flex items-center justify-center">
+        <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 md:h-full h-full min-h-0">
+            <div className="flex-grow flex items-center justify-center min-h-0">
                 <Plot tiles={gameState.plot} currentSeason={gameState.currentSeason} />
             </div>
         </div>
 
-        <div className="md:col-span-1 lg:col-span-2 md:h-full min-h-0 flex-grow">
+  <div className="md:col-span-1 lg:col-span-2 h-full min-h-0 flex w-full overflow-visible">
           <ControlPanel 
             gameState={gameState}
             onAction={handleAction}
@@ -853,7 +1158,7 @@ const App: React.FC = () => {
         ></div>
         <div
           id="mobile-sidebar"
-          className={`absolute right-0 top-0 h-full w-64 max-w-[75vw] bg-pixel-panel border-l-2 border-pixel-border shadow-[0_0_30px_rgba(0,0,0,0.9)] p-0 transition-transform duration-200 ${
+          className={`season-panel-solid absolute right-0 top-0 h-full w-64 max-w-[75vw] bg-pixel-panel border-l-2 border-pixel-border shadow-[0_0_30px_rgba(0,0,0,0.9)] p-0 transition-transform duration-200 ${
             isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
@@ -864,7 +1169,7 @@ const App: React.FC = () => {
                 type="button"
                 aria-label="Close sidebar"
                 onClick={closeSidebar}
-                className="text-pixel-accent text-2xl leading-none"
+                className="season-button text-2xl leading-none px-3 py-1"
               >
                 ×
               </button>
@@ -877,7 +1182,7 @@ const App: React.FC = () => {
                 onPreferenceChange={handlePreferenceChange}
               />
             </div>
-            <div className="sticky bottom-0 border-t border-pixel-border bg-pixel-panel/70 p-4 backdrop-blur-sm">
+            <div className="season-panel-solid sticky bottom-0 border-t border-pixel-border bg-pixel-panel/70 p-4 backdrop-blur-sm">
               <button
                 onMouseDown={handleResetHoldStart}
                 onMouseUp={handleResetHoldEnd}
@@ -905,9 +1210,15 @@ const App: React.FC = () => {
         <ConfettiLayer bursts={confettiBursts} />
       )}
   <audio ref={titleAudioRef} src={getAssetUrl('audio/titlescreen.mp3')} preload="auto" />
+  <audio ref={mainIntroAudioRef} src={getAssetUrl('audio/mainbg1.mp3')} preload="auto" />
   <audio ref={mainAudioRef} src={getAssetUrl('audio/mainbg.mp3')} preload="auto" />
+  <audio ref={witherAudioRef} src={getAssetUrl('audio/witherpull.mp3')} preload="auto" />
+  <audio ref={milestoneAudioRef} src={getAssetUrl('audio/milestone.mp3')} preload="auto" />
+  <audio ref={clickAudioRef} src={getAssetUrl('audio/clicksound.mp3')} preload="auto" />
+  <audio ref={goldDiamondAudioRef} src={getAssetUrl('audio/golddiamond.mp3')} preload="auto" />
       {isDebugVisible && <DebugPanel setGameState={setGameState} addLog={addLog} />}
       {!hasStarted && <TitleScreen onStart={handleStartGame} />}
+    </div>
     </div>
   );
 };

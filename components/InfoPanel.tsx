@@ -12,7 +12,7 @@ const InfoPanel: React.FC<InfoPanelProps> = ({ upgrades }) => {
         .map(id => ({ ...UPGRADES[id], level: upgrades[id].level }));
 
     return (
-        <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel flex flex-col h-full p-4">
+        <div className="season-panel-solid bg-pixel-panel border-2 border-pixel-border shadow-pixel flex flex-col h-full p-4">
             <h2 className="text-lg text-pixel-accent border-b-2 border-pixel-border mb-3 pb-2 text-center">
                 Garden Info
             </h2>

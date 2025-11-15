@@ -8,12 +8,16 @@ export const DEFAULT_PREFERENCES: Preferences = {
     classicActionsUI: false,
     classicUpgradesUI: false,
     disableConfetti: false,
+    disableParticles: false,
+    effectsVolume: 1,
 };
 
 export const INITIAL_PLOT_SIZE = 16;
 export const TREE_LIFESPAN_SEEDS = 60;
 export const PLANTING_MILESTONES = [1, 100, 500, 700, 800, 1000, 3000, 4000, 5000, 7000, 10000];
 export const SEASON_DURATION = 300; // 5 minutes
+export const GOLDEN_TREE_DURATION_MS = 30_000;
+export const DIAMOND_TREE_DURATION_MS = 60_000;
 
 export const MILESTONE_REWARDS: Record<number, MilestoneReward[]> = {
     130: [
@@ -43,13 +47,13 @@ export const SEASON_TEXTURES: Record<Season, { tree: string; withered?: string }
     },
     summer: {
         tree: 'https://tinyurl.com/4fun7b8r',
-        withered: 'https://tinyurl.com/2wsrp3my'
     },
     autumn: {
         tree: 'https://tinyurl.com/tv3ue2kd', 
     },
     winter: {
-        tree: 'https://tinyurl.com/2f45puk8', 
+        tree: 'https://tinyurl.com/2f45puk8',
+        withered: 'https://tinyurl.com/2wsrp3my'
     }
 };
 
@@ -61,7 +65,7 @@ export const SEASON_MULTIPLIERS: Record<Season, number> = {
 };
 
 export const SEASON_TIPS: Record<Season, string> = {
-    spring: 'Spring is the rarest even with a 5x multiplier :p',
+    spring: 'Spring is the rarest event with a 5x multiplier :p',
     summer: 'Summer is steady. Use the downtime to save seeds and prep upgrades.',
     autumn: 'Autumn rewards planning with a 3x bonus—clear withered trees early.',
     winter: 'Winter slows production. Lean on manual gathering and compost to push through.',
@@ -93,6 +97,7 @@ export const EVENTS: EventDefinition[] = [
                 emptyTile.isGolden = false;
                 emptyTile.isDiamond = true;
                 emptyTile.seedsGenerated = 0;
+                emptyTile.rareExpiresAt = Date.now() + DIAMOND_TREE_DURATION_MS;
                 return gs;
             }
 
@@ -100,6 +105,8 @@ export const EVENTS: EventDefinition[] = [
             if (upgradeTile) {
                 upgradeTile.isDiamond = true;
                 upgradeTile.isGolden = false;
+                upgradeTile.seedsGenerated = 0;
+                upgradeTile.rareExpiresAt = Date.now() + DIAMOND_TREE_DURATION_MS;
             }
             return gs;
         }
@@ -117,6 +124,7 @@ export const EVENTS: EventDefinition[] = [
                 emptyTile.isDiamond = false;
                 emptyTile.isGolden = true;
                 emptyTile.seedsGenerated = 0;
+                emptyTile.rareExpiresAt = Date.now() + GOLDEN_TREE_DURATION_MS;
                 return gs;
             }
 
@@ -124,6 +132,7 @@ export const EVENTS: EventDefinition[] = [
             if (upgradeTile) {
                 upgradeTile.isGolden = true;
                 upgradeTile.isDiamond = false;
+                upgradeTile.rareExpiresAt = Date.now() + GOLDEN_TREE_DURATION_MS;
             }
             return gs;
         }
@@ -200,6 +209,7 @@ export const EVENTS: EventDefinition[] = [
                 if (target) {
                     target.isGolden = true;
                     target.isDiamond = false;
+                    target.rareExpiresAt = Date.now() + GOLDEN_TREE_DURATION_MS;
                 }
             }
             return gs;
@@ -219,6 +229,7 @@ export const EVENTS: EventDefinition[] = [
             const protectedBySprinklers = sprinklerChance > 0 && Math.random() * 100 < sprinklerChance;
             if (unlucky && !protectedBySprinklers) {
                 unlucky.isWithered = true;
+                unlucky.rareExpiresAt = undefined;
             }
             return gs;
         }
@@ -244,6 +255,7 @@ const createInitialPlot = (): PlotTile[] => {
         seedsGenerated: 0,
         isGolden: false,
         isDiamond: false,
+        rareExpiresAt: undefined,
     }));
 }
 
@@ -311,12 +323,17 @@ export const UPGRADES: Upgrades = {
     'fertilizer': {
         id: 'fertilizer',
         name: 'Fertilizer',
-        description: (level) => `Adds a ${2 * (level + 1)}% chance for a newly planted tree to be golden.`,
+        description: (level) => {
+            const chance = Math.max(0, (2 * level) - 1);
+            return chance > 0
+                ? `Adds roughly a ${chance}% chance for a newly planted tree to be golden.`
+                : 'Adds a small chance for a newly planted tree to be golden (unlocked at Lv. 1).';
+        },
         category: 'Cultivation',
         baseCost: 2500,
         costExponent: 2.8,
         baseEffect: 2, 
-        effectFormula: (level, base) => level * base,
+        effectFormula: (level, base) => Math.max(0, (level * base) - 1),
         levelMilestones: {
             7: 700,
         },

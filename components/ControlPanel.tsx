@@ -56,7 +56,7 @@ const ActionButton: React.FC<{
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       disabled={disabled}
-                className={`relative w-full ${compact ? 'p-2' : 'p-2 sm:p-4'} bg-pixel-border text-pixel-text font-bold shadow-pixel hover:bg-pixel-accent/50 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden touch-action-none`}
+                className={`season-button relative w-full ${compact ? 'p-2' : 'p-2 sm:p-4'} bg-pixel-border text-pixel-text font-bold shadow-pixel active:shadow-pixel-inset active:translate-y-px disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center overflow-hidden touch-pan-y`}
       aria-disabled={disabled}
     >
       {typeof progress === 'number' && progress > 0 && (
@@ -79,9 +79,9 @@ const ActionButton: React.FC<{
 };
 
 const StatusChip: React.FC<{ label: React.ReactNode; value: React.ReactNode }> = ({ label, value }) => (
-  <div className="flex flex-col rounded-md border border-pixel-border/50 bg-pixel-panel/80 px-2 py-1">
-    <span className="text-[10px] uppercase tracking-widest text-pixel-text/60">{label}</span>
-    <span className="text-sm font-bold text-pixel-accent">{value}</span>
+  <div className="flex flex-col rounded-md border border-pixel-border/50 bg-pixel-panel/80 px-2 py-1 min-w-0">
+    <span className="text-[10px] uppercase tracking-widest text-pixel-text/60 leading-tight">{label}</span>
+    <span className="text-sm font-bold text-pixel-accent leading-tight break-words">{value}</span>
   </div>
 );
 
@@ -116,7 +116,7 @@ const ClassicUpgradeRow: React.FC<{
         <button
           onClick={() => onBuy(upgradeDef.id)}
           disabled={locked || !canAfford}
-          className="px-3 py-1 bg-pixel-tree text-pixel-bg font-bold shadow-pixel hover:bg-green-400 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap text-xs"
+          className="season-button px-3 py-1 bg-pixel-tree text-pixel-bg font-bold shadow-pixel active:shadow-pixel-inset active:translate-y-px disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap text-xs"
         >
           {locked && requiredMilestone ? `Plant ${requiredMilestone}` : buttonLabel}
         </button>
@@ -195,7 +195,7 @@ const UpgradeCard: React.FC<{
         <button
           onClick={() => onBuy(upgradeDef.id)}
           disabled={locked || !canAfford}
-          className="px-3 py-1 bg-pixel-tree text-pixel-bg font-bold shadow-pixel hover:bg-green-400 active:shadow-pixel-inset active:translate-y-px disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap text-xs"
+          className="season-button px-3 py-1 bg-pixel-tree text-pixel-bg font-bold shadow-pixel active:shadow-pixel-inset active:translate-y-px disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap text-xs"
         >
           {locked && requiredMilestone ? `Plant ${requiredMilestone}` : buttonLabel}
         </button>
@@ -217,7 +217,7 @@ const UpgradeCategory: React.FC<{
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center justify-between text-left font-bold text-pixel-accent md:hidden"
+      className="season-button flex w-full items-center justify-between text-left font-bold text-pixel-accent md:hidden"
     >
       <span>{title}</span>
       <span className="text-xl leading-none">{isExpanded ? '−' : '+'}</span>
@@ -379,7 +379,7 @@ const ControlPanel: React.FC<{
   const TABS: Tab[] = ['Actions', 'Upgrades', 'Stats'];
 
   return (
-    <div className="bg-pixel-panel border-2 border-pixel-border shadow-pixel flex flex-col h-full">
+  <div className="season-panel-solid bg-pixel-panel border-2 border-pixel-border shadow-pixel flex flex-col h-full w-full overflow-visible">
       {/* Integrated Resources Display */}
       <div className="hidden md:block p-2 lg:p-4 border-b-2 border-pixel-border">
           <h2 className="text-lg text-center mb-1">Resources</h2>
@@ -398,7 +398,7 @@ const ControlPanel: React.FC<{
                   aria-expanded={milestoneOpen}
                   aria-label={milestoneOpen ? 'Hide milestone rewards' : 'Show milestone rewards'}
                   onClick={() => setMilestoneOpen(prev => !prev)}
-                  className="flex h-7 w-7 items-center justify-center rounded border border-pixel-border bg-pixel-panel text-lg leading-none text-pixel-accent shadow-pixel"
+                  className="season-button flex h-7 w-7 items-center justify-center rounded border border-pixel-border bg-pixel-panel text-lg leading-none text-pixel-accent shadow-pixel"
                 >
                   {milestoneOpen ? '−' : '+'}
                 </button>
@@ -416,9 +416,16 @@ const ControlPanel: React.FC<{
               {milestoneOpen && (
                 <div className="mt-2 border-t border-pixel-border/30 pt-2">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-pixel-text/60 mb-1">Rewards</p>
-                  <ul className="space-y-1 list-disc list-inside">
+                  <ul className="space-y-1 list-disc list-inside text-[11px] leading-snug">
                     {nextMilestone.rewards.map((reward, index) => (
-                      <li key={`milestone-reward-${reward.type}-${index}`}>{reward.message}</li>
+                      <li key={`milestone-reward-${reward.type}-${index}`}>
+                        {reward.type === 'unlockUpgrade' ? (
+                          <span>
+                            <span className="font-bold text-pixel-accent">{UPGRADES[reward.upgradeId]?.name ?? reward.upgradeId}</span>
+                            <span className="text-pixel-text/70">: Unlock at {formatNumber(nextMilestone.value)} trees</span>
+                          </span>
+                        ) : reward.message}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -432,9 +439,9 @@ const ControlPanel: React.FC<{
           <button 
             key={tab} 
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 px-2 text-center font-bold whitespace-nowrap
-              ${activeTab === tab ? 'bg-pixel-border text-pixel-accent' : 'bg-transparent hover:bg-pixel-border/50'}
-            `}
+            className={`season-tab-button flex-1 py-2 px-2 text-center font-bold whitespace-nowrap ${
+              activeTab === tab ? 'season-tab-button-active' : ''
+            }`}
           >
             {tab}
           </button>
@@ -442,14 +449,14 @@ const ControlPanel: React.FC<{
       </div>
 
       <div className="p-2 lg:p-4 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-y-auto min-h-0 pb-4">
+  <div className="flex-grow overflow-y-auto min-h-0 pb-2 sm:pb-4">
           {activeTab === 'Actions' && (
             <div className="space-y-3">
               {!useClassicActions && (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <StatusChip
                     label="Season"
-                    value={<span className="capitalize">{gameState.currentSeason} · {SEASON_MULTIPLIERS[gameState.currentSeason]}x</span>}
+                    value={<span className="capitalize">{gameState.currentSeason}</span>}
                   />
                   <StatusChip
                     label={
@@ -699,7 +706,7 @@ const ControlPanel: React.FC<{
                 <div>Developer: Pasao</div>
                 <div>Co-Developer: Scoggins</div>
                 <div>Assets: Cuaresma, Mas</div>
-                <div>Version: 1.5.1</div>
+                <div>Version: 1.5.2</div>
               </div>
             </div>
           )}

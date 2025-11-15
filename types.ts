@@ -13,6 +13,7 @@ export interface PlotTile {
   seedsGenerated: number;
   isGolden: boolean;
   isDiamond: boolean;
+  rareExpiresAt?: number;
 }
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
@@ -50,6 +51,8 @@ export interface Preferences {
   classicActionsUI: boolean;
   classicUpgradesUI: boolean;
   disableConfetti: boolean;
+  disableParticles: boolean;
+  effectsVolume: number;
 }
 
 export interface GameState {

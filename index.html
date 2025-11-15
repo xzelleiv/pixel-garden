@@ -36,18 +36,161 @@
       }
     </script>
     <style>
+      :root {
+        --season-bg: #3c2f2f;
+        --season-bg-secondary: #362828;
+        --season-panel-bg: rgba(75, 59, 59, 0.88);
+        --season-panel-solid: rgba(38, 24, 24, 0.9);
+        --season-border: rgba(109, 91, 91, 0.95);
+        --season-accent: #ffb400;
+        --season-button-bg: #63473c;
+        --season-button-hover: #ffb400;
+        --season-button-text: #fff4df;
+        --season-button-hover-text: #2b1205;
+      }
       body {
+        position: relative;
         font-family: 'Press Start 2P', cursive;
         -webkit-font-smoothing: none;
         -moz-osx-font-smoothing: grayscale;
         image-rendering: pixelated;
-        /* Prevent scrollbars from the layout, especially on mobile */
-        max-height: 100vh;
-        overflow-y: hidden;
+        margin: 0;
+        min-height: 100vh;
+        overflow: hidden;
+        background: var(--season-bg-secondary);
+        background-attachment: fixed;
+        color: var(--season-text, #f0f4f8);
+        transition: background 0.9s ease, color 0.4s ease;
       }
-      @media (min-width: 1024px) {
-        body {
-          zoom: 0.9;
+      #root {
+        min-height: 100vh;
+      }
+      body [class*="bg-pixel-panel"] {
+        background-color: var(--season-panel-bg) !important;
+        transition: background-color 0.6s ease, box-shadow 0.6s ease;
+      }
+      body .season-panel-solid {
+        background-color: var(--season-panel-solid) !important;
+      }
+      body [class*="border-pixel-border"] {
+        border-color: var(--season-border) !important;
+        transition: border-color 0.6s ease;
+      }
+      body [class*="text-pixel-accent"] {
+        color: var(--season-accent) !important;
+        transition: color 0.4s ease;
+      }
+      body [class*="bg-pixel-bg"] {
+        background-color: var(--season-bg-secondary) !important;
+      }
+      body .season-button {
+        background-color: var(--season-button-bg) !important;
+        color: var(--season-button-text) !important;
+        border-color: rgba(0, 0, 0, 0.35) !important;
+        transition: background-color 0.25s ease, color 0.25s ease, transform 0.1s ease;
+      }
+      body .season-button:hover:not(:disabled) {
+        background-color: var(--season-button-hover) !important;
+        color: var(--season-button-hover-text) !important;
+      }
+      body .season-button:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      body .season-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      body .season-tab-button {
+        color: var(--season-button-text, #fff4df);
+        border-bottom: 2px solid transparent;
+        transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
+      }
+      body .season-tab-button:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+        color: var(--season-accent);
+      }
+      body .season-tab-button-active {
+        background-color: var(--season-button-bg) !important;
+        color: var(--season-accent) !important;
+        border-bottom-color: var(--season-accent);
+      }
+      body .log-panel-root {
+        background-color: #0a0a0a !important;
+      }
+      body .log-panel-root [class*="border-pixel-border"] {
+        border-color: #6d5b5b !important;
+      }
+      body .log-panel-root .text-pixel-accent {
+        color: #ffb400 !important;
+      }
+      body[data-season="spring"] {
+        --season-bg: radial-gradient(circle at 15% 15%, #ffd9ec 0%, #fda6d6 35%, #2b0f1f 90%);
+        --season-bg-secondary: #2b0f1f;
+        --season-panel-bg: rgba(255, 223, 240, 0.26);
+        --season-panel-solid: rgba(43, 15, 31, 0.88);
+        --season-border: rgba(255, 194, 230, 0.65);
+        --season-accent: #ff93c9;
+        --season-button-bg: #4b1324;
+        --season-button-hover: #ffbbdd;
+        --season-button-text: #ffeef6;
+  --season-button-hover-text: #3a0613;
+      }
+      body[data-season="autumn"] {
+        --season-bg: radial-gradient(circle at 20% 10%, #ffe7b0 0%, #ffb347 35%, #3b1603 90%);
+        --season-bg-secondary: #2c1203;
+        --season-panel-bg: rgba(255, 196, 122, 0.25);
+        --season-panel-solid: rgba(44, 18, 3, 0.88);
+        --season-border: rgba(255, 207, 140, 0.7);
+        --season-accent: #ffd15f;
+        --season-button-bg: #4b1e03;
+        --season-button-hover: #ffb347;
+        --season-button-text: #fff4df;
+  --season-button-hover-text: #2c1203;
+      }
+      body[data-season="winter"] {
+        --season-bg: linear-gradient(180deg, #f5fbff 0%, #b6d1ff 45%, #0b1d3a 100%);
+        --season-bg-secondary: #0b1d3a;
+        --season-panel-bg: rgba(255, 255, 255, 0.32);
+        --season-panel-solid: rgba(11, 29, 58, 0.82);
+        --season-border: rgba(200, 226, 255, 0.65);
+        --season-accent: #d0f0ff;
+        --season-button-bg: rgba(255, 255, 255, 0.22);
+        --season-button-hover: #d0f0ff;
+        --season-button-text: #e8f6ff;
+  --season-button-hover-text: #0b1d3a;
+      }
+      .seasonal-particles {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+      }
+      .season-particle {
+        position: absolute;
+        top: -8%;
+        pointer-events: none;
+        animation-name: seasonal-particle-fall;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15));
+        will-change: transform, opacity;
+        mix-blend-mode: screen;
+      }
+      body[data-season="winter"] .season-snow {
+        mix-blend-mode: lighten;
+        filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
+      }
+      @keyframes seasonal-particle-fall {
+        0% {
+          transform: translate3d(0, -10%, 0) rotate(0deg);
+          opacity: 0;
+        }
+        15% {
+          opacity: 0.85;
+        }
+        100% {
+          transform: translate3d(var(--drift, 0px), 115vh, 0) rotate(var(--spin, 360deg));
+          opacity: 0;
         }
       }
     </style>

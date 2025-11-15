@@ -44,7 +44,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs, maxLogs = 6, typingSpeed = 20
   const mobileHeightClass = compact ? 'min-h-[3.25rem] max-h-[3.25rem]' : 'min-h-[4.25rem] max-h-[4.25rem]';
 
   return (
-    <div className={`font-press-start w-full max-w-7xl bg-pixel-console-bg border-2 border-pixel-border shadow-pixel p-2 lg:p-4 ${mobileHeightClass} md:min-h-[6rem] lg:h-40 mb-2 sm:mb-4 flex flex-col justify-end gap-1 overflow-hidden`}>
+    <div className={`log-panel-root font-press-start w-full max-w-7xl bg-pixel-console-bg border-2 border-pixel-border shadow-pixel p-2 lg:p-4 ${mobileHeightClass} md:min-h-[6rem] lg:h-40 mb-2 sm:mb-4 flex flex-col justify-end gap-1 overflow-hidden`}>
       {visibleLogs.map((log, index) => {
         const isOlderLog = index < visibleLogs.length - 2;
         return (

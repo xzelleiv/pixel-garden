@@ -10,7 +10,7 @@ interface DebugPanelProps {
 const DebugButton: React.FC<{ onClick: () => void, children: React.ReactNode }> = ({ onClick, children }) => (
     <button
         onClick={onClick}
-        className="w-full text-left p-1 text-xs text-pixel-text hover:bg-pixel-border"
+        className="season-button w-full text-left px-2 py-1 text-xs uppercase tracking-widest"
     >
         {children}
     </button>
@@ -75,7 +75,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ setGameState, addLog }) => {
             <div className="fixed bottom-4 left-4">
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="bg-pixel-accent text-pixel-bg p-2 font-bold shadow-pixel"
+                    className="season-button rounded px-3 py-2 font-bold shadow-pixel"
                 >
                     Debug
                 </button>
@@ -84,10 +84,12 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ setGameState, addLog }) => {
     }
 
     return (
-        <div className="fixed bottom-4 left-4 bg-pixel-panel border-2 border-pixel-border shadow-pixel w-64 text-sm z-50">
+        <div className="fixed bottom-4 left-4 season-panel-solid bg-pixel-panel border-2 border-pixel-border shadow-pixel w-64 text-sm z-50">
             <div className="flex justify-between items-center p-2 bg-pixel-border">
                 <h3 className="font-bold text-pixel-accent">Debug Menu</h3>
-                <button onClick={() => setIsOpen(false)} className="font-bold text-pixel-text">X</button>
+                <button onClick={() => setIsOpen(false)} className="season-button px-2 py-1 text-xs font-bold leading-none">
+                    X
+                </button>
             </div>
             <div className="p-2 max-h-64 overflow-y-auto">
                 <div className="space-y-1">

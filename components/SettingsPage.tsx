@@ -18,7 +18,7 @@ const SettingsToggle: FC<{
     role="switch"
     aria-checked={value}
     onClick={() => onChange(!value)}
-    className={`flex w-full items-center justify-between rounded-lg border border-pixel-border/60 bg-pixel-panel/70 px-3 py-2 text-left transition hover:border-pixel-accent ${value ? 'shadow-pixel' : ''}`}
+  className={`season-panel-solid flex w-full items-center justify-between rounded-lg border border-pixel-border/60 bg-pixel-panel/70 px-3 py-2 text-left transition hover:border-pixel-accent ${value ? 'shadow-pixel' : ''}`}
   >
     <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-pixel-accent">{label}</p>
     <span
@@ -30,18 +30,19 @@ const SettingsToggle: FC<{
 );
 
 const SettingsPage: FC<SettingsPageProps> = ({ audioVolume, onAudioVolumeChange, preferences, onPreferenceChange }) => {
-  const percentageLabel = `${Math.round(audioVolume * 100)}%`;
+  const musicPercentageLabel = `${Math.round(audioVolume * 100)}%`;
+  const effectsPercentageLabel = `${Math.round((preferences.effectsVolume ?? 1) * 100)}%`;
 
   return (
     <div className="flex flex-col gap-6 text-xs text-pixel-console-text">
-      <section className="rounded-xl border border-pixel-border bg-pixel-panel/70 p-4 shadow-inner">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-pixel-accent">Audio</p>
-          <span className="text-[11px] font-bold text-pixel-accent">{percentageLabel}</span>
-        </div>
-        <div className="mt-4">
+  <section className="season-panel-solid rounded-xl border border-pixel-border bg-pixel-panel/70 p-4 shadow-inner space-y-4">
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-pixel-accent">Music Volume</p>
+            <span className="text-[11px] font-bold text-pixel-accent">{musicPercentageLabel}</span>
+          </div>
           <label htmlFor="audio-volume" className="sr-only">
-            Audio volume
+            Music volume
           </label>
           <input
             id="audio-volume"
@@ -51,17 +52,41 @@ const SettingsPage: FC<SettingsPageProps> = ({ audioVolume, onAudioVolumeChange,
             step={0.01}
             value={audioVolume}
             onChange={event => onAudioVolumeChange(Number(event.target.value))}
-            className="w-full cursor-pointer appearance-none rounded-full bg-pixel-border/50 accent-pixel-accent"
+            className="mt-2 w-full cursor-pointer appearance-none rounded-full bg-pixel-border/50 accent-pixel-accent"
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-pixel-accent">Effects Volume</p>
+            <span className="text-[11px] font-bold text-pixel-accent">{effectsPercentageLabel}</span>
+          </div>
+          <label htmlFor="effects-volume" className="sr-only">
+            Effects volume
+          </label>
+          <input
+            id="effects-volume"
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={preferences.effectsVolume ?? 1}
+            onChange={event => onPreferenceChange('effectsVolume', Number(event.target.value))}
+            className="mt-2 w-full cursor-pointer appearance-none rounded-full bg-pixel-border/50 accent-pixel-accent"
           />
         </div>
       </section>
 
-      <section className="rounded-xl border border-pixel-border/60 bg-pixel-panel/60 p-4 space-y-3">
+  <section className="season-panel-solid rounded-xl border border-pixel-border/60 bg-pixel-panel/60 p-4 space-y-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-pixel-accent">Accessibility</p>
         <SettingsToggle
           label="Reduced Motion"
           value={preferences.reducedMotion}
           onChange={(value) => onPreferenceChange('reducedMotion', value)}
+        />
+        <SettingsToggle
+          label="Disable Particles"
+          value={preferences.disableParticles}
+          onChange={(value) => onPreferenceChange('disableParticles', value)}
         />
         <SettingsToggle
           label="Compact Logs"
@@ -70,7 +95,7 @@ const SettingsPage: FC<SettingsPageProps> = ({ audioVolume, onAudioVolumeChange,
         />
       </section>
 
-      <section className="rounded-xl border border-dashed border-pixel-border/60 bg-pixel-panel/60 p-4 space-y-3">
+  <section className="season-panel-solid rounded-xl border border-dashed border-pixel-border/60 bg-pixel-panel/60 p-4 space-y-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-pixel-accent">Gameplay</p>
         <SettingsToggle
           label="Season Tips"
