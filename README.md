@@ -1,12 +1,12 @@
 # Pixel Garden
 
-Pixel Garden is a cozy incremental gardening game built with React + Vite. Plant trees, gather seeds, unlock upgrades, and now keep tending your grove even when you're offline.
+Pixel Garden is a incremental gardening game built with React + Vite. Plant trees, gather seeds, unlock upgrades, even when you're offline.
 
 ## Features
 
-- 🌱 **Chill incremental gameplay** – grow trees, harvest seeds, and manage seasonal events.
-- 🧪 **Upgrade system** – invest in tools, cultivation, expansion, and automation paths.
-- 📱 **Offline-ready PWA** – install the game on mobile or desktop and play without a network connection.
+- **incremental gameplay** – grow trees, harvest seeds, and manage seasonal events. (based on UPC)
+-  **Upgrade system** – invest in tools, cultivation, expansion, and automation paths.
+- **Offline PWA** – install the game on mobile or desktop and play without a network connection.
 
 ## Getting Started
 
@@ -39,4 +39,3 @@ This runs `vite build`, emits the PWA service worker + manifest, and outputs fil
 - TypeScript for type safety
 - GitHub Pages for hosting
 
-Happy gardening! 🌿
